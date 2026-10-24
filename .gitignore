@@ -1,0 +1,40 @@
+# Environments, credentials and caches
+database/.venv/
+database/.secrets/
+database/models/
+database/backups/
+database/.cache/
+# Run summaries and verification reports describe a real archive.
+database/artifacts/
+dist/
+**/__pycache__/
+*.pyc
+.DS_Store
+.env
+.env.*
+
+# Patient archive exports never belong in this public repository.
+/identity/local-profile.json
+/lab-results/*
+!/lab-results/tools/
+!/lab-results/quest/
+/lab-results/quest/*
+!/lab-results/quest/tools/
+/health-records/*
+!/health-records/cleveland-clinic/
+/health-records/cleveland-clinic/*
+!/health-records/cleveland-clinic/tools/
+/vitals/*
+!/vitals/oneblood/
+/vitals/oneblood/*
+!/vitals/oneblood/tools/
+/research/
+/conversations/
+/workspace/
+/checks/
+/ontology/
+/symptoms/*
+!/symptoms/tools/
+/meds/*
+!/meds/tools/
+*.dump

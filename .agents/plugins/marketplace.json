@@ -1,0 +1,11 @@
+{
+  "name": "health-archive-marketplace",
+  "plugins": [
+    {
+      "name": "health-archive",
+      "source": {"source": "local", "path": "./plugins/health-archive"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "description": "Optional retrieval expectations for healthdb verify: each question must return a passage containing one of expect_any. Add questions about your own records.",
+  "questions": []
+}

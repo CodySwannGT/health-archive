@@ -1,0 +1,6 @@
+psycopg[binary]>=3.2,<4
+pgvector>=0.4,<1
+fastembed>=0.7,<1
+beautifulsoup4>=4.13,<5
+jsonschema>=4.25,<5
+pypdf>=6,<7

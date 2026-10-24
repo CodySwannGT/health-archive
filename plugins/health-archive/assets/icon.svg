@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Health archive">
+  <rect width="512" height="512" rx="112" fill="#2f5d50"/>
+  <g fill="none" stroke="#f7f7f5" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M136 168h240v208a24 24 0 0 1-24 24H160a24 24 0 0 1-24-24z"/>
+    <path d="M120 112h272v56H120z"/>
+    <path d="M176 288h40l24-48 32 96 24-48h40"/>
+  </g>
+</svg>

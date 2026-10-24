@@ -1,0 +1,33 @@
+name: codex-health
+services:
+  db:
+    build:
+      context: .
+      target: health_postgres
+    image: codex-health-postgres:16-age1.6-vector0.8.6
+    container_name: codex-health-db
+    restart: unless-stopped
+    network_mode: bridge
+    command: ["postgres", "-c", "session_preload_libraries=age"]
+    environment:
+      POSTGRES_USER: health_admin
+      POSTGRES_DB: health
+      POSTGRES_PASSWORD_FILE: /run/secrets/admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets:
+      - admin_password
+    ports:
+      - "127.0.0.1:55476:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U health_admin -d health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+secrets:
+  admin_password:
+    file: .secrets/admin-password
+volumes:
+  pgdata:
+    name: codex-health-pgdata

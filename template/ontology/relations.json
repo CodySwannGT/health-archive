@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0",
+  "description": "Graph relationship types. Reprojection fails for an unregistered relation. No relation establishes causality.",
+  "relations": [
+    {
+      "relation": "ADMINISTRATION_OF_MEDICATION",
+      "semantics": "patient_report",
+      "description": "Completed single dose refers to its medication identity, without implying an ongoing regimen.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "BELONGS_TO_PATIENT",
+      "semantics": "ownership",
+      "description": "Resource or document belongs to the patient chart.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "CHANGE_OF_MEDICATION",
+      "semantics": "patient_report",
+      "description": "Medication change event refers to the medication identity it changes.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "DOCUMENTED_BY",
+      "semantics": "provenance",
+      "description": "Resource is documented by a searchable source document or excerpt.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "EXTRACTED_FROM_CONVERSATION_MESSAGE",
+      "semantics": "verbatim_source_link",
+      "description": "Reviewed record quotes this user message verbatim. Provenance only.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "INSTANCE_OF",
+      "semantics": "ontology",
+      "description": "Resource is an instance of an ontology record category.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "NEXT_CONVERSATION_MESSAGE",
+      "semantics": "conversation_structure",
+      "description": "Message order within a conversation session.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "OWNS_PATIENT_PROFILE",
+      "semantics": "ownership",
+      "description": "Local user account owns the patient profile.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "PART_OF_CONVERSATION",
+      "semantics": "conversation_structure",
+      "description": "Message belongs to a conversation session.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "PART_OF_REPORT",
+      "semantics": "source_structure",
+      "description": "Parsed laboratory observation belongs to its source report.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "PATIENT_HYPOTHESIS_ABOUT_MEDICATION",
+      "semantics": "patient_hypothesis",
+      "description": "Patient hypothesis refers to a medication. Causality is not established.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "POSSIBLE_SAME_SOURCE_EVENT",
+      "semantics": "unreviewed_identity_candidate",
+      "description": "Records from different providers may describe the same event. A review candidate, never a merge.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "PREFERENCE_ABOUT_MEDICATION",
+      "semantics": "patient_report",
+      "description": "Patient care preference refers to a medication.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REFERENCES",
+      "semantics": "patient_report",
+      "description": "Record refers to, clarifies or provides context for another record without changing it.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REPORTED_ASSOCIATION",
+      "semantics": "patient_report",
+      "description": "Patient-reported association between records. Causality is not established.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REPORTED_MEDICATION_RESPONSE",
+      "semantics": "patient_report",
+      "description": "Patient-reported response refers to a medication. Causality is not established.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REPORTED_PERSISTENT_SYMPTOM",
+      "semantics": "patient_report",
+      "description": "Symptom reported as persisting during a treatment.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REPORTED_PRE_TREATMENT_SYMPTOM",
+      "semantics": "patient_report",
+      "description": "Symptom reported as present before a treatment.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REPORTED_RESPONSE_AFTER_ADMINISTRATION",
+      "semantics": "patient_report",
+      "description": "Patient-reported response followed a specific dose. Temporal only; causality is not established.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REPORTED_TREATMENT_GOAL",
+      "semantics": "patient_report",
+      "description": "Symptom the patient reports a treatment was intended to address.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "REPORTS_DEMOGRAPHICS_FOR",
+      "semantics": "patient_report",
+      "description": "Demographic report describes the patient.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "SAME_READING_COMPONENT",
+      "semantics": "patient_report",
+      "description": "Systolic and diastolic values come from the same blood pressure reading.",
+      "establishes_causality": false
+    },
+    {
+      "relation": "SUPERSEDES_MEASUREMENT",
+      "semantics": "patient_report",
+      "description": "Explicit patient correction replaces an earlier measurement of the same metric and date; the earlier report is retained.",
+      "establishes_causality": false
+    }
+  ]
+}

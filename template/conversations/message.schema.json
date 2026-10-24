@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Source-preserving health conversation message",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "record_type": {
+      "const": "conversation_message"
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^chatmsg_[0-9a-f]{24}$"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "patient_scope": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]{1,64}$",
+      "description": "The patient's record slug, from the patient profile."
+    },
+    "role": {
+      "enum": [
+        "user",
+        "assistant"
+      ]
+    },
+    "message_mode": {
+      "enum": [
+        "message",
+        "clarification_prompt",
+        "clarification_answer"
+      ]
+    },
+    "source_ordinal": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_message_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "message_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_blocks": {
+      "type": "array",
+      "minItems": 1
+    },
+    "clinical_assertion": {
+      "const": "not_extracted"
+    },
+    "content_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "source_event_path": {
+          "type": "string"
+        },
+        "source_event_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "text_path": {
+          "type": "string"
+        },
+        "text_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "original_session_path": {
+          "type": "string"
+        },
+        "original_line_number": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "source_event_path",
+        "source_event_sha256",
+        "text_path",
+        "text_sha256",
+        "original_session_path",
+        "original_line_number"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "message_id",
+    "session_id",
+    "patient_scope",
+    "role",
+    "message_mode",
+    "source_ordinal",
+    "source_timestamp",
+    "source_message_id",
+    "message_text",
+    "content_blocks",
+    "clinical_assertion",
+    "content_sha256",
+    "provenance"
+  ],
+  "additionalProperties": false
+}

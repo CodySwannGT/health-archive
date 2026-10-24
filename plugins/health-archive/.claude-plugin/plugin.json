@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "health-archive",
+  "displayName": "Health Archive",
+  "version": "1.0.0",
+  "description": "Source-backed personal health archive for each signed-in user: query labs, medications, symptoms and vitals, and record quote-backed reports through an OAuth MCP connector.",
+  "author": {
+    "name": "Cody Swann",
+    "url": "https://github.com/CodySwannGT"
+  },
+  "homepage": "https://github.com/CodySwannGT/health-archive/tree/main/plugins/health-archive",
+  "repository": "https://github.com/CodySwannGT/health-archive",
+  "license": "Apache-2.0",
+  "keywords": [
+    "health",
+    "medical-records",
+    "mcp",
+    "audit-trail",
+    "ontology"
+  ],
+  "icon": "./assets/icon.png"
+}

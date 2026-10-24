@@ -1,0 +1,969 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Source-preserving medication regimen and change event",
+  "description": "Patient-reported workbook and supplemental narrative medication data. Original source evidence and unknown doses remain explicit. No clinical terminology mapping or treatment assessment is performed.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/medication_regimen"
+    },
+    {
+      "$ref": "#/$defs/medication_change"
+    },
+    {
+      "$ref": "#/$defs/medication_administration"
+    }
+  ],
+  "$defs": {
+    "quantity": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "enum": [
+            "mg",
+            "g",
+            "mcg",
+            "IU",
+            "tbsp",
+            "tsp"
+          ]
+        },
+        "period": {
+          "enum": [
+            "day",
+            "week",
+            "pill",
+            "administration"
+          ]
+        },
+        "basis": {
+          "type": "string"
+        },
+        "source_cells": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "period",
+        "basis",
+        "source_cells"
+      ],
+      "additionalProperties": false
+    },
+    "source_date": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "precision": {
+          "enum": [
+            "day",
+            "approximate_month",
+            "text"
+          ]
+        },
+        "source_text": {
+          "type": "string"
+        },
+        "year": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "month": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 12
+        },
+        "qualifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "date",
+        "precision",
+        "source_text",
+        "year",
+        "month",
+        "qualifier"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "day"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "date": {
+                "type": "string",
+                "format": "date"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "enum": [
+                  "approximate_month",
+                  "text"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "date": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "timing": {
+      "type": "object",
+      "properties": {
+        "weekday": {
+          "enum": [
+            null,
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+            "Sat",
+            "Sun"
+          ]
+        },
+        "time_of_day": {
+          "enum": [
+            "AM",
+            "PM"
+          ]
+        }
+      },
+      "required": [
+        "weekday",
+        "time_of_day"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/workbook_provenance"
+        },
+        {
+          "$ref": "#/$defs/narrative_provenance"
+        }
+      ]
+    },
+    "event_date_link": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^(med|event)_[0-9a-f]{24}$"
+        },
+        "date": {
+          "$ref": "#/$defs/source_date"
+        }
+      },
+      "required": [
+        "event_id",
+        "date"
+      ],
+      "additionalProperties": false
+    },
+    "change_state": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            null,
+            "not_listed",
+            "stopped",
+            "active",
+            "planned_discontinuation",
+            "on-hold"
+          ]
+        },
+        "quantities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "scheduled_administrations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "weekday": {
+                "enum": [
+                  "Mon",
+                  "Tue",
+                  "Wed",
+                  "Thu",
+                  "Fri",
+                  "Sat",
+                  "Sun"
+                ]
+              },
+              "time_of_day": {
+                "enum": [
+                  "AM",
+                  "PM"
+                ]
+              },
+              "quantity": {
+                "$ref": "#/$defs/quantity"
+              }
+            },
+            "required": [
+              "weekday",
+              "time_of_day",
+              "quantity"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "text",
+        "status",
+        "quantities",
+        "scheduled_administrations"
+      ],
+      "additionalProperties": false
+    },
+    "medication_regimen": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "record_type": {
+          "const": "medication_regimen"
+        },
+        "medication_id": {
+          "type": "string",
+          "pattern": "^med_[0-9a-f]{24}$"
+        },
+        "name_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category_source": {
+          "type": "string"
+        },
+        "route_family": {
+          "enum": [
+            "oral",
+            "injection",
+            "unspecified"
+          ]
+        },
+        "clinical_route_code": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "stopped",
+            "not-taken",
+            "on-hold"
+          ]
+        },
+        "status_source": {
+          "enum": [
+            "Active",
+            "Stopped",
+            "Not taking",
+            "On hold"
+          ]
+        },
+        "as_of_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "as_of_date_basis": {
+          "enum": [
+            "filename",
+            "explicit_import_argument",
+            "unspecified",
+            "patient_report"
+          ]
+        },
+        "dose_scope": {
+          "enum": [
+            "current_recorded_regimen",
+            "last_recorded_regimen_before_stop",
+            "not_currently_taken",
+            "last_recorded_regimen_before_pause"
+          ]
+        },
+        "total_dose": {
+          "$ref": "#/$defs/quantity"
+        },
+        "dose_per_pill": {
+          "$ref": "#/$defs/quantity"
+        },
+        "dose_per_administration": {
+          "$ref": "#/$defs/quantity"
+        },
+        "pills_per_administration": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "pills_per_day": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "schedule": {
+          "type": "object",
+          "properties": {
+            "frequency_source": {
+              "type": "string"
+            },
+            "timing_source": {
+              "type": "string"
+            },
+            "period": {
+              "enum": [
+                "day",
+                "week"
+              ]
+            },
+            "administrations_per_period": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "frequency_basis": {
+              "type": "string"
+            },
+            "timings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/timing"
+              }
+            }
+          },
+          "required": [
+            "frequency_source",
+            "timing_source",
+            "period",
+            "administrations_per_period",
+            "frequency_basis",
+            "timings"
+          ],
+          "additionalProperties": false
+        },
+        "notes_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "change_event_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^event_[0-9a-f]{24}$"
+          },
+          "uniqueItems": true
+        },
+        "known_started_on": {
+          "$ref": "#/$defs/event_date_link"
+        },
+        "known_stopped_on": {
+          "$ref": "#/$defs/event_date_link"
+        },
+        "added_to_list_on": {
+          "$ref": "#/$defs/event_date_link"
+        },
+        "supersedes_regimen": {
+          "type": "object",
+          "description": "Reviewed source-preserving supersession of a workbook regimen under the same medication identity. The original full source row remains historical.",
+          "properties": {
+            "source_path": {
+              "const": "meds/medications.jsonl"
+            },
+            "record_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "source_path",
+            "record_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "known_paused_on": {
+          "$ref": "#/$defs/event_date_link"
+        }
+      },
+      "required": [
+        "schema_version",
+        "patient_scope",
+        "content_sha256",
+        "provenance",
+        "record_type",
+        "medication_id",
+        "name_source",
+        "category_source",
+        "route_family",
+        "clinical_route_code",
+        "terminology_code",
+        "status",
+        "status_source",
+        "as_of_date",
+        "as_of_date_basis",
+        "dose_scope",
+        "total_dose",
+        "dose_per_pill",
+        "dose_per_administration",
+        "pills_per_administration",
+        "pills_per_day",
+        "schedule",
+        "notes_source",
+        "change_event_ids",
+        "known_started_on",
+        "known_stopped_on",
+        "added_to_list_on"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "stopped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "dose_scope": {
+                "const": "last_recorded_regimen_before_stop"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not-taken"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "dose_scope": {
+                "const": "not_currently_taken"
+              },
+              "total_dose": {
+                "type": "null"
+              },
+              "known_stopped_on": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "on-hold"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "dose_scope": {
+                "const": "last_recorded_regimen_before_pause"
+              },
+              "known_stopped_on": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "known_paused_on"
+            ]
+          }
+        }
+      ]
+    },
+    "medication_change": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "record_type": {
+          "const": "medication_change"
+        },
+        "event_id": {
+          "type": "string",
+          "pattern": "^event_[0-9a-f]{24}$"
+        },
+        "medication_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^med_[0-9a-f]{24}$"
+        },
+        "scope": {
+          "enum": [
+            "medication",
+            "global"
+          ]
+        },
+        "change_type": {
+          "enum": [
+            "notation_clarification",
+            "regimen_changed",
+            "planned_discontinuation",
+            "added_to_list",
+            "started",
+            "stopped",
+            "paused"
+          ]
+        },
+        "subject_source": {
+          "type": "string"
+        },
+        "date": {
+          "$ref": "#/$defs/source_date"
+        },
+        "date_role": {
+          "enum": [
+            "notation_recorded_date",
+            "change_date",
+            "plan_recorded_date",
+            "listing_added_date"
+          ]
+        },
+        "previous": {
+          "$ref": "#/$defs/change_state"
+        },
+        "current": {
+          "$ref": "#/$defs/change_state"
+        },
+        "planned_effective_time": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "date": {
+              "type": "null"
+            },
+            "precision": {
+              "const": "relative"
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "anchor_date": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date"
+            }
+          },
+          "required": [
+            "date",
+            "precision",
+            "source_text",
+            "anchor_date"
+          ],
+          "additionalProperties": false
+        },
+        "action_basis": {
+          "enum": [
+            "patient_declared_hold"
+          ],
+          "description": "A patient decision to hold medication from the stated date, not proof of an elapsed missed dose or a completed longitudinal trial."
+        },
+        "dose_withholding": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "format": "date"
+            },
+            "time_of_day": {
+              "enum": [
+                "AM",
+                "PM",
+                "unspecified"
+              ]
+            },
+            "status": {
+              "const": "declared_not_taking"
+            },
+            "source_text": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "date",
+            "time_of_day",
+            "status",
+            "source_text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "patient_scope",
+        "content_sha256",
+        "provenance",
+        "record_type",
+        "event_id",
+        "medication_id",
+        "scope",
+        "change_type",
+        "subject_source",
+        "date",
+        "date_role",
+        "previous",
+        "current",
+        "planned_effective_time"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": "global"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "medication_id": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": "medication"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "medication_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "change_type": {
+                "const": "paused"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "action_basis"
+            ],
+            "properties": {
+              "current": {
+                "properties": {
+                  "status": {
+                    "const": "on-hold"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "workbook_provenance": {
+      "type": "object",
+      "properties": {
+        "workbook_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sheet": {
+          "enum": [
+            "Current Regimen",
+            "Change Log"
+          ]
+        },
+        "cells": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "source_values": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "workbook_sha256",
+        "sheet",
+        "cells",
+        "source_values"
+      ],
+      "additionalProperties": false
+    },
+    "narrative_provenance": {
+      "type": "object",
+      "properties": {
+        "source_path": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "quote": {
+                "type": "string"
+              },
+              "start_char": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end_char": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "quote",
+              "start_char",
+              "end_char"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "source_path",
+        "source_sha256",
+        "reported_at",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "medication_administration": {
+      "type": "object",
+      "description": "A single completed patient-reported dose. Does not establish an ongoing regimen or a prescription.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_type": {
+          "const": "medication_administration"
+        },
+        "administration_id": {
+          "type": "string",
+          "pattern": "^admin_[0-9a-f]{24}$"
+        },
+        "medication_id": {
+          "type": "string",
+          "pattern": "^med_[0-9a-f]{24}$"
+        },
+        "name_source": {
+          "type": "string"
+        },
+        "status": {
+          "const": "completed"
+        },
+        "occurrence_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "occurrence_time_source": {
+          "type": "string"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dose": {
+          "$ref": "#/$defs/quantity"
+        },
+        "units_taken": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "dosage_form_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "route_family": {
+          "enum": [
+            "oral",
+            "injection",
+            "unspecified"
+          ]
+        },
+        "clinical_route_code": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "timing_intent_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "provenance": {
+          "$ref": "#/$defs/narrative_provenance"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "patient_scope",
+        "record_type",
+        "administration_id",
+        "medication_id",
+        "name_source",
+        "status",
+        "occurrence_date",
+        "occurrence_time_source",
+        "reported_at",
+        "dose",
+        "units_taken",
+        "dosage_form_source",
+        "route_family",
+        "clinical_route_code",
+        "terminology_code",
+        "timing_intent_source",
+        "notes",
+        "provenance",
+        "content_sha256"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

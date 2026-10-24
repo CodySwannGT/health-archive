@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "health-archive": {"type": "http", "url": "https://health-mcp-production-91ec.up.railway.app/mcp"}
+  }
+}

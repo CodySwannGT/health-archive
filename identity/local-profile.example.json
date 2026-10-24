@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "mode": "local_single_user",
+  "authentication": "none",
+  "default_user_id": "usr_00000000000000000000000000000001",
+  "default_patient_id": "pat_00000000000000000000000000000001",
+  "users": [
+    {"user_id": "usr_00000000000000000000000000000001", "display_name": "First User", "type": "local_placeholder"}
+  ],
+  "patients": [
+    {"patient_id": "pat_00000000000000000000000000000001", "display_name": "First User",
+     "legacy_patient_scopes": ["first_user"], "timezone": "UTC", "source_patient_keys": {}}
+  ],
+  "access": [
+    {"user_id": "usr_00000000000000000000000000000001", "patient_id": "pat_00000000000000000000000000000001", "role": "owner"}
+  ]
+}

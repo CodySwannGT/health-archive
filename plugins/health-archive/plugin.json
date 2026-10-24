@@ -1,0 +1,36 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "health-archive",
+  "version": "1.0.0",
+  "description": "Source-backed personal health archive for each signed-in user: query labs, medications, symptoms and vitals, and record quote-backed reports through an OAuth MCP connector.",
+  "author": {
+    "name": "Cody Swann",
+    "url": "https://github.com/CodySwannGT"
+  },
+  "homepage": "https://github.com/CodySwannGT/health-archive/tree/main/plugins/health-archive",
+  "repository": "https://github.com/CodySwannGT/health-archive",
+  "license": "Apache-2.0",
+  "keywords": [
+    "health",
+    "medical-records",
+    "mcp",
+    "audit-trail",
+    "ontology"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Health Archive",
+        "shortDescription": "Query and record a source-backed personal health archive",
+        "longDescription": "Each person who signs in gets a private, source-backed health archive of lab results, clinical records, medications, symptoms, vitals and conversations. Answers are grounded in their records, and new reports are recorded as reviewed, quote-backed facts.",
+        "developerName": "Cody Swann",
+        "category": "Productivity",
+        "websiteURL": "https://github.com/CodySwannGT/health-archive",
+        "brandColor": "#2F5D50",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/icon.png"
+      },
+      "onboardingSkill": "./skills/health-archive-grounding/SKILL.md"
+    }
+  }
+}

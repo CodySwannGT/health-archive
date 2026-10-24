@@ -1,0 +1,270 @@
+{
+  "schema_version": "1.0",
+  "description": "Resource categories agents can query and record. Reprojection fails for an unregistered category.",
+  "categories": [
+    {
+      "category": "administered_medications",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: administered medications."
+    },
+    {
+      "category": "allergies",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: allergies."
+    },
+    {
+      "category": "anthropometric_measurement",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "body_composition_measurement",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "care_plans",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: care plans."
+    },
+    {
+      "category": "care_preference",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "care_teams",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: care teams."
+    },
+    {
+      "category": "clinical_notes",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: clinical notes."
+    },
+    {
+      "category": "conversation_message",
+      "domain": "health_conversation",
+      "schema_path": "conversations/message.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "conversation_session",
+      "domain": "health_conversation",
+      "schema_path": null,
+      "description": "Health conversation thread identity."
+    },
+    {
+      "category": "encounters",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: encounters."
+    },
+    {
+      "category": "exercise_routine",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "exercise_session",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "goals",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: goals."
+    },
+    {
+      "category": "immunizations",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: immunizations."
+    },
+    {
+      "category": "insurance",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: insurance."
+    },
+    {
+      "category": "lab_commentary",
+      "domain": "laboratory_sources",
+      "schema_path": null,
+      "description": "Laboratory report commentary without a result value."
+    },
+    {
+      "category": "lab_results",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: lab results."
+    },
+    {
+      "category": "laboratory",
+      "domain": "laboratory_sources",
+      "schema_path": null,
+      "description": "Laboratory report or parsed laboratory result."
+    },
+    {
+      "category": "measurement_context",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "medication_administration",
+      "domain": "patient_medications",
+      "schema_path": "meds/medication.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "medication_change",
+      "domain": "patient_medications",
+      "schema_path": "meds/medication.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "medication_regimen",
+      "domain": "patient_medications",
+      "schema_path": "meds/medication.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "medication_response",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "medications",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: medications."
+    },
+    {
+      "category": "patient_context",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "patient_demographics",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "patient_hypothesis",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "patient_instructions",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: patient instructions."
+    },
+    {
+      "category": "prescriptions",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: prescriptions."
+    },
+    {
+      "category": "problems",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: problems."
+    },
+    {
+      "category": "procedures",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: procedures."
+    },
+    {
+      "category": "recurring_pattern",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "reported_association",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "reported_exposure",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "result_reports",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: result reports."
+    },
+    {
+      "category": "social_history",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: social history."
+    },
+    {
+      "category": "symptom_observation",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "visit_diagnoses",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: visit diagnoses."
+    },
+    {
+      "category": "visit_reasons",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: visit reasons."
+    },
+    {
+      "category": "vital-signs",
+      "domain": "oneblood",
+      "schema_path": null,
+      "description": "Donor-center vital sign measurement."
+    },
+    {
+      "category": "vital_panels",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: vital panels."
+    },
+    {
+      "category": "vital_sign_measurement",
+      "domain": "patient_symptoms",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Reviewed record type defined by its JSON Schema branch."
+    },
+    {
+      "category": "vitals",
+      "domain": "cleveland_clinic",
+      "schema_path": null,
+      "description": "Clinical record (C-CDA) section: vitals."
+    }
+  ]
+}

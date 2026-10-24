@@ -1,0 +1,16 @@
+{
+  "name": "health-archive-marketplace",
+  "owner": {
+    "name": "Cody Swann",
+    "url": "https://github.com/CodySwannGT"
+  },
+  "description": "Health archive plugin: skills plus an OAuth MCP connector with a private archive per user.",
+  "plugins": [
+    {
+      "name": "health-archive",
+      "source": "./plugins/health-archive",
+      "description": "Query and record a source-backed personal health archive.",
+      "category": "productivity"
+    }
+  ]
+}

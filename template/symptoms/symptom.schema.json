@@ -1,0 +1,3280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Source-preserving patient symptom narrative records",
+  "description": "Reported symptoms, recurring patterns, exposures, associations, hypotheses, medication responses and care preferences. Report time differs from symptom onset. Preferences and patient attribution do not establish diagnoses or causality. Patient-reported vital signs keep blood pressure components and pulse as separate source-backed values.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "symptom_observation"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "symptom_key": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "assertion": {
+              "enum": [
+                "present",
+                "absent",
+                "uncertain"
+              ]
+            },
+            "temporal_scope": {
+              "enum": [
+                "recurring_pattern",
+                "current_state",
+                "lifelong_history",
+                "treatment_response",
+                "dated_episode"
+              ]
+            },
+            "sites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "string"
+                  },
+                  "laterality": {
+                    "enum": [
+                      "unspecified",
+                      "left",
+                      "right",
+                      "bilateral",
+                      "not_applicable"
+                    ]
+                  }
+                },
+                "required": [
+                  "site",
+                  "laterality"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "onset": {
+              "type": "object",
+              "properties": {
+                "source_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "precision": {
+                  "enum": [
+                    "longstanding_uncertain",
+                    "approximate_duration",
+                    "childhood",
+                    "unspecified",
+                    "relative_to_treatment"
+                  ]
+                },
+                "exact_date": {
+                  "type": "null"
+                },
+                "relative_duration": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "value": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "unit": {
+                      "enum": [
+                        "months",
+                        "years",
+                        "days"
+                      ]
+                    },
+                    "approximate": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "unit",
+                    "approximate"
+                  ],
+                  "additionalProperties": false
+                },
+                "anchor_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                }
+              },
+              "required": [
+                "source_text",
+                "precision",
+                "exact_date",
+                "relative_duration",
+                "anchor_date"
+              ],
+              "additionalProperties": false
+            },
+            "severity_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "numeric_severity": {
+              "type": "null"
+            },
+            "features_source": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "current_presence": {
+              "enum": [
+                "unknown",
+                "present",
+                "absent",
+                "partial",
+                "uncertain"
+              ]
+            },
+            "occurrence": {
+              "$ref": "#/$defs/occurrence"
+            },
+            "episode_count": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "episode_unit": {
+                  "type": "string"
+                },
+                "period_source": {
+                  "type": "string"
+                },
+                "source_text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "episode_unit",
+                "period_source",
+                "source_text"
+              ],
+              "additionalProperties": false
+            },
+            "time_of_day": {
+              "$ref": "#/$defs/timeOfDay"
+            }
+          },
+          "required": [
+            "symptom_key",
+            "label",
+            "assertion",
+            "temporal_scope",
+            "sites",
+            "onset",
+            "severity_source",
+            "numeric_severity",
+            "features_source",
+            "notes",
+            "current_presence"
+          ],
+          "additionalProperties": false
+        },
+        "symptom_id": {
+          "type": "string",
+          "pattern": "^symptom_[0-9a-f]{24}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details",
+        "symptom_id"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "reported_exposure"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "exposure_key": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "schedule_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "weekdays_reported": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "Fri",
+                  "Sat",
+                  "Sun",
+                  "Mon",
+                  "Tue",
+                  "Wed",
+                  "Thu"
+                ]
+              }
+            },
+            "amount": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "unit": {
+                  "enum": [
+                    "drinks"
+                  ]
+                },
+                "period": {
+                  "enum": [
+                    null,
+                    "day",
+                    "week",
+                    "weekend",
+                    "month",
+                    "occasion"
+                  ]
+                },
+                "source_text": {
+                  "type": "string"
+                },
+                "standard_drink_equivalence": {
+                  "type": "null"
+                },
+                "approximate": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "value",
+                "unit",
+                "period",
+                "source_text",
+                "standard_drink_equivalence",
+                "approximate"
+              ],
+              "additionalProperties": false
+            },
+            "start_date": {
+              "type": "null"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "occupational_workload": {
+              "type": "object",
+              "properties": {
+                "full_time_jobs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "weekly_hours": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "full_time_jobs",
+                "weekly_hours"
+              ],
+              "additionalProperties": false
+            },
+            "occurrence": {
+              "$ref": "#/$defs/occurrence"
+            },
+            "assertion": {
+              "enum": [
+                "present",
+                "absent",
+                "uncertain"
+              ]
+            },
+            "fluid_volume": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "unit": {
+                  "enum": [
+                    "gallons",
+                    "liters",
+                    "fluid_ounces",
+                    "milliliters"
+                  ]
+                },
+                "gallon_standard": {
+                  "const": "unspecified"
+                },
+                "approximate": {
+                  "type": "boolean"
+                },
+                "source_text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "unit",
+                "gallon_standard",
+                "approximate",
+                "source_text"
+              ],
+              "additionalProperties": false
+            },
+            "time_of_day": {
+              "$ref": "#/$defs/timeOfDay"
+            }
+          },
+          "required": [
+            "exposure_key",
+            "label",
+            "schedule_source",
+            "weekdays_reported",
+            "amount",
+            "start_date",
+            "notes",
+            "unknowns"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "recurring_pattern"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "pattern_kind": {
+              "const": "reported_typical_week"
+            },
+            "phases": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sequence": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "time_source": {
+                    "type": "string"
+                  },
+                  "exact_date": {
+                    "type": "null"
+                  },
+                  "observations": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "topic": {
+                          "type": "string",
+                          "description": "What the patient describes in this phase, such as a symptom or function."
+                        },
+                        "source_text": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "topic",
+                        "source_text"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "sequence",
+                  "time_source",
+                  "exact_date",
+                  "observations"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "related_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "pattern_kind",
+            "phases",
+            "related_record_ids",
+            "notes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "reported_association"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "from_record_id": {
+              "type": "string",
+              "pattern": "^symrec_[0-9a-f]{24}$"
+            },
+            "to_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "association_type": {
+              "enum": [
+                "reported_temporal_association",
+                "reported_inverse_covariation"
+              ]
+            },
+            "causality": {
+              "const": "not_established"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "from_record_id",
+            "to_record_ids",
+            "association_type",
+            "causality",
+            "notes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "patient_hypothesis"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "source_text": {
+              "type": "string"
+            },
+            "certainty": {
+              "enum": [
+                "patient_uncertain",
+                "working_assumption",
+                "patient_confident"
+              ]
+            },
+            "related_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "medication_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^med_[0-9a-f]{24}$"
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "source_text",
+            "certainty",
+            "related_record_ids",
+            "notes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "medication_response"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "medication_id": {
+              "type": "string",
+              "pattern": "^med_[0-9a-f]{24}$"
+            },
+            "medication_name": {
+              "type": "string"
+            },
+            "response_source": {
+              "type": "string"
+            },
+            "interpretation": {
+              "enum": [
+                "unresolved_wording",
+                "patient_reported_change"
+              ]
+            },
+            "features_source": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "related_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "pre_treatment_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "persistent_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "treatment_goal_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "related_administration_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^admin_[0-9a-f]{24}$"
+              }
+            }
+          },
+          "required": [
+            "medication_id",
+            "medication_name",
+            "response_source",
+            "interpretation",
+            "features_source",
+            "related_record_ids",
+            "notes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "care_preference"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "preference_source": {
+              "type": "string"
+            },
+            "treatment_targets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "deferred_interventions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "priority": {
+              "enum": [
+                "last_resort",
+                "explicit_preference"
+              ]
+            },
+            "medication_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^med_[0-9a-f]{24}$"
+              }
+            },
+            "related_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "preference_source",
+            "treatment_targets",
+            "deferred_interventions",
+            "priority",
+            "medication_ids",
+            "related_record_ids",
+            "notes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "exercise_routine"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "schedule": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "weekdays": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                        "Sat",
+                        "Sun"
+                      ]
+                    }
+                  },
+                  "frequency_qualifier": {
+                    "enum": [
+                      "reported_regular",
+                      "usually"
+                    ]
+                  },
+                  "schedule_source": {
+                    "type": "string"
+                  },
+                  "activities": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "modality": {
+                          "enum": [
+                            "resistance_training",
+                            "cardio"
+                          ]
+                        },
+                        "modality_source": {
+                          "type": "string"
+                        },
+                        "sessions_per_day": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "duration_per_session": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "minimum": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "maximum": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "unit": {
+                              "const": "min"
+                            },
+                            "approximate": {
+                              "type": "boolean"
+                            },
+                            "source_text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "minimum",
+                            "maximum",
+                            "unit",
+                            "approximate",
+                            "source_text"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "modality",
+                        "modality_source",
+                        "sessions_per_day",
+                        "duration_per_session"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "weekdays",
+                  "frequency_qualifier",
+                  "schedule_source",
+                  "activities"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "start_date": {
+              "type": "null"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "schedule",
+            "start_date",
+            "notes",
+            "unknowns"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "anthropometric_measurement"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "metric": {
+              "enum": [
+                "body_height",
+                "body_weight"
+              ]
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "unit": {
+              "enum": [
+                "in",
+                "lb"
+              ]
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "value_basis": {
+              "enum": [
+                "explicit_patient_value",
+                "feet_inches_arithmetic",
+                "patient_clarified_value"
+              ]
+            },
+            "measurement_time_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "measurement_conditions": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "occurrence": {
+              "$ref": "#/$defs/occurrence"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "supersedes_measurement": {
+              "$ref": "#/$defs/measurementSupersession"
+            },
+            "original_written_value": {
+              "type": "number",
+              "description": "Number as originally written when a structured patient clarification confirms a different value."
+            }
+          },
+          "required": [
+            "metric",
+            "label",
+            "value",
+            "unit",
+            "source_text",
+            "value_basis",
+            "measurement_time_source",
+            "measurement_conditions",
+            "notes",
+            "unknowns"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "metric": {
+                    "const": "body_height"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "unit": {
+                    "const": "in"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "unit": {
+                    "const": "lb"
+                  },
+                  "value_basis": {
+                    "enum": [
+                      "explicit_patient_value",
+                      "patient_clarified_value"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "value_basis": {
+                    "const": "patient_clarified_value"
+                  }
+                },
+                "required": [
+                  "value_basis"
+                ]
+              },
+              "then": {
+                "required": [
+                  "original_written_value"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "measurement_context"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "same_scale": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "same_time_of_day": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "clock_time": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "clothing_comparability": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "related_record_ids": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "source_text",
+            "same_scale",
+            "same_time_of_day",
+            "clock_time",
+            "clothing_comparability",
+            "related_record_ids",
+            "notes",
+            "unknowns"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "patient_context"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "context_key": {
+              "type": "string"
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "related_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "occurrence": {
+              "$ref": "#/$defs/occurrence"
+            }
+          },
+          "required": [
+            "label",
+            "context_key",
+            "source_text",
+            "related_record_ids",
+            "notes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "exercise_session"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "status": {
+              "const": "completed_reported"
+            },
+            "modality": {
+              "enum": [
+                "cardio",
+                "resistance_training",
+                "other"
+              ]
+            },
+            "modality_source": {
+              "type": "string"
+            },
+            "occurrence": {
+              "$ref": "#/$defs/occurrence"
+            },
+            "timing_source": {
+              "type": "string"
+            },
+            "duration": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "unit": {
+                  "const": "min"
+                },
+                "source_text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "unit",
+                "source_text"
+              ],
+              "additionalProperties": false
+            },
+            "intensity_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "related_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "status",
+            "modality",
+            "modality_source",
+            "occurrence",
+            "timing_source",
+            "duration",
+            "intensity_source",
+            "related_record_ids",
+            "notes",
+            "unknowns"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "patient_demographics"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "date_of_birth": {
+              "type": "string",
+              "format": "date"
+            },
+            "date_format_basis": {
+              "type": "string"
+            },
+            "age_years": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "age_as_of_date": {
+              "type": "string",
+              "format": "date"
+            },
+            "age_basis": {
+              "const": "explicit_patient_report"
+            }
+          },
+          "required": [
+            "label",
+            "source_text",
+            "notes",
+            "unknowns",
+            "date_of_birth",
+            "date_format_basis",
+            "age_years",
+            "age_as_of_date",
+            "age_basis"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "body_composition_measurement"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "metric": {
+              "const": "body_fat_percentage"
+            },
+            "value_range": {
+              "type": "object",
+              "properties": {
+                "minimum": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "maximum": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              },
+              "required": [
+                "minimum",
+                "maximum"
+              ],
+              "additionalProperties": false
+            },
+            "unit": {
+              "const": "%"
+            },
+            "value_basis": {
+              "const": "approximate_patient_estimate"
+            },
+            "measurement_method": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "measurement_time_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "measurement_conditions": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "label",
+            "source_text",
+            "notes",
+            "unknowns",
+            "metric",
+            "value_range",
+            "unit",
+            "value_basis",
+            "measurement_method",
+            "measurement_time_source",
+            "measurement_conditions"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "vital_sign_measurement"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "description": "Patient-reported vital sign value. Each blood pressure component is a separate record linked to its paired component from the same reading. Device, position, arm and clock time remain unknown unless reported.",
+          "properties": {
+            "metric": {
+              "enum": [
+                "systolic_blood_pressure",
+                "diastolic_blood_pressure",
+                "pulse"
+              ]
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "unit": {
+              "enum": [
+                "mmHg",
+                "beats/min"
+              ]
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "value_basis": {
+              "enum": [
+                "explicit_patient_value"
+              ]
+            },
+            "unit_basis": {
+              "enum": [
+                "explicit_source_unit",
+                "conventional_unit_for_metric"
+              ]
+            },
+            "reading_key": {
+              "type": "string"
+            },
+            "paired_component_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "measurement_time_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "measurement_conditions": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "time_of_day": {
+              "$ref": "#/$defs/timeOfDay"
+            },
+            "occurrence": {
+              "$ref": "#/$defs/occurrence"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "metric",
+            "label",
+            "value",
+            "unit",
+            "source_text",
+            "value_basis",
+            "unit_basis",
+            "reading_key",
+            "paired_component_record_ids",
+            "measurement_time_source",
+            "measurement_conditions",
+            "occurrence",
+            "notes",
+            "unknowns"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "occurrence": {
+      "type": "object",
+      "description": "Date of the reported episode or assessment, distinct from report timestamp and symptom onset.",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "precision": {
+          "const": "day"
+        },
+        "basis": {
+          "enum": [
+            "explicit_patient_date",
+            "relative_to_report_date"
+          ]
+        },
+        "source_text": {
+          "type": "string"
+        },
+        "anchor_date": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "date",
+        "precision",
+        "basis",
+        "source_text",
+        "anchor_date"
+      ],
+      "additionalProperties": false
+    },
+    "measurementSupersession": {
+      "type": "object",
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "reason_source": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "record_id",
+        "content_sha256",
+        "reason_source"
+      ],
+      "additionalProperties": false
+    },
+    "timeOfDay": {
+      "type": "object",
+      "description": "Reported part of day for an exposure, symptom change or measurement. Distinct from an exact clock time, which stays unknown unless reported.",
+      "properties": {
+        "period": {
+          "enum": [
+            "morning",
+            "afternoon",
+            "evening",
+            "night"
+          ]
+        },
+        "source_text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "period",
+        "source_text"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

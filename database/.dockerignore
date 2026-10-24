@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!railway
+!railway/entrypoint.sh
+!railway/backup.sh
+!railway/pg_hba.conf
+!railway.json
