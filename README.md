@@ -8,7 +8,7 @@ This repository holds the code only. It never contains anyone's health data.
 
 - **The database is the system of record.** PostgreSQL holds every source file's original bytes and version history. It also holds reviewed records, FHIR-aligned projections, an Apache AGE graph and pgvector embeddings.
 - **Writes are atomic.** Each one materializes the patient's archive from the database, applies the change, validates it against that archive's ontology and stores everything in one transaction. A record leaves the current archive only by explicit correction, supersession or retirement.
-- **The ontology is queryable data.** Registered record categories and relationship types live in the database and the graph. Recording an unregistered category or relation fails, so new distinctions are defined before they are used.
+- **The ontology is queryable data.** Registered record categories, a FHIR-aligned clinical type hierarchy, concepts and relationship types live in the database and the graph. Concepts join records that measure the same thing across sources, such as a clinic's coded weight and a patient's reported weight, and record how each match was made. Recording an unregistered category or relation, or an edge outside its relation's allowed endpoints, fails, so new distinctions are defined before they are used.
 - **Evidence kinds stay distinct.** Patient reports, clinical findings, family history, patient hypotheses, agent research and assistant advice are kept apart. Reported associations never establish causation, and advice never becomes a completed action.
 - **Every account is isolated.** It owns one patient chart, and row-level security limits the read-only role to the signed-in user's patients.
 
