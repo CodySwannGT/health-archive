@@ -42,6 +42,13 @@ if found['results']:
     check('fetch returns document text', not result.get('isError') and doc['text'])
 result, onto = c.call('ontology', {'category': 'vital_sign_measurement'})
 check('ontology returns a category JSON Schema', not result.get('isError') and onto['json_schema'])
+result, listed_concepts = c.call('concepts', {'limit': 5})
+check('concepts are listed', not result.get('isError') and 'results' in listed_concepts)
+if listed_concepts['count']:
+    result, first = c.call('concept', {'concept': listed_concepts['results'][0]['concept_id']})
+    check('a concept returns its records across sources', not result.get('isError') and first['records'])
+result, types = c.call('ontology', {'types': True})
+check('clinical types are registered', not result.get('isError') and types['count'] >= 30)
 result, _ = c.call('query', {'sql': 'DELETE FROM health.resources'})
 check('query tool cannot write', result.get('isError'))
 old_access, old_refresh = c.tokens['access_token'], c.tokens['refresh_token']
