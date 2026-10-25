@@ -107,8 +107,10 @@ def execute(conn,args):
             fetched=cur.fetchmany(args.limit+1)
             result={'rows':fetched[:args.limit],'truncated':len(fetched)>args.limit,'limit':args.limit}
     elif args.command=='labs':
-        result=conn.execute('''SELECT resource_id,source,source_record_id,name,clinical_date,clinical_date_role,numeric_value,comparator,value_text,unit_source,reference_text,flag_source,code_system,code,assertion,provenance
-          FROM health.observations WHERE category IN ('laboratory','lab_results') AND name ILIKE %s ORDER BY clinical_date DESC NULLS LAST,name LIMIT %s''',('%'+args.name+'%',args.limit)).fetchall()
+        # Laboratory results from every source, matched by result name or concept label.
+        result=conn.execute('''SELECT o.resource_id,o.source,o.source_record_id,o.name,o.concept_id,c.label AS concept,o.concept_basis,o.clinical_date,o.clinical_date_role,o.numeric_value,o.comparator,o.value_text,o.unit_source,o.reference_text,o.flag_source,o.code_system,o.code,o.assertion,o.provenance
+          FROM health.observations o LEFT JOIN health.concepts c ON c.patient_id=o.patient_id AND c.concept_id=o.concept_id
+          WHERE o.clinical_type='laboratory_result' AND (o.name ILIKE %s OR c.label ILIKE %s) ORDER BY o.clinical_date DESC NULLS LAST,o.name LIMIT %s''',('%'+args.name+'%','%'+args.name+'%',args.limit)).fetchall()
     elif args.command=='timeline':
         result=conn.execute('''SELECT x.resource_id,r.source,x.resource_type,x.category,x.name,x.clinical_date,x.clinical_date_role,x.recorded_at,x.assertion,x.evidence_kind,x.value_text,x.unit_source,x.provenance
           FROM health.resources x JOIN health.records r USING(record_id)
@@ -120,9 +122,9 @@ def execute(conn,args):
           WHERE x.is_current AND (x.resource_type IN ('MedicationStatement','MedicationRequest','MedicationAdministration') OR (%s AND x.category='medication_change'))
           AND (%s OR r.source='patient_medications') ORDER BY x.clinical_date DESC NULLS LAST,x.name''',(args.changes,args.all_sources)).fetchall()
     elif args.command=='anthropometrics':
-        result=conn.execute("SELECT resource_id,record_id,is_current,name,clinical_date,clinical_date_role,recorded_at,numeric_value,unit_source,unit_ucum,assertion,evidence_kind,normalized,provenance FROM health.resources WHERE (is_current OR %s) AND category IN ('anthropometric_measurement','body_composition_measurement','measurement_context') ORDER BY clinical_date DESC NULLS LAST,recorded_at DESC NULLS LAST,name",(args.history,)).fetchall()
+        result=conn.execute("SELECT x.resource_id,x.record_id,r.source,x.is_current,x.name,x.concept_id,x.clinical_date,x.clinical_date_role,x.recorded_at,x.numeric_value,x.unit_source,x.unit_ucum,x.assertion,x.evidence_kind,x.normalized,x.provenance FROM health.resources x JOIN health.records r USING(record_id) WHERE (x.is_current OR %s) AND (x.clinical_type IN ('body_measurement','body_composition') OR x.category='measurement_context') ORDER BY x.clinical_date DESC NULLS LAST,x.recorded_at DESC NULLS LAST,x.name",(args.history,)).fetchall()
     elif args.command=='vitals':
-        result=conn.execute("SELECT x.resource_id,x.record_id,r.source,x.name,x.clinical_date,x.clinical_date_role,x.recorded_at,x.numeric_value,x.unit_source,x.unit_ucum,x.evidence_kind,x.normalized->'source_details'->'details'->>'reading_key' AS reading_key,x.provenance FROM health.resources x JOIN health.records r USING(record_id) WHERE x.is_current AND x.category IN ('vital_sign_measurement','vital-signs') ORDER BY x.clinical_date DESC NULLS LAST,x.recorded_at DESC NULLS LAST,x.name").fetchall()
+        result=conn.execute("SELECT x.resource_id,x.record_id,r.source,x.name,x.clinical_date,x.clinical_date_role,x.recorded_at,x.numeric_value,x.unit_source,x.unit_ucum,x.evidence_kind,x.normalized->'source_details'->'details'->>'reading_key' AS reading_key,x.provenance,x.concept_id FROM health.resources x JOIN health.records r USING(record_id) WHERE x.is_current AND x.clinical_type='vital_sign' AND x.resource_type='Observation' ORDER BY x.clinical_date DESC NULLS LAST,x.recorded_at DESC NULLS LAST,x.name").fetchall()
     elif args.command=='history':
         result=conn.execute('''SELECT c.repository,c.commit_sha,c.committed_at,c.author_name,split_part(c.message,E'\\n',1) AS subject,h.sha256,h.size_bytes,h.content_omitted_reason
           FROM health.source_history h JOIN health.source_commits c USING(patient_id,repository,commit_sha)
@@ -136,12 +138,33 @@ def execute(conn,args):
         result={'path':args.path,'versions':changes,'commits_containing_path':len(result)}
     elif args.command=='ontology':
         if args.category:
-            result=conn.execute('SELECT * FROM health.ontology_categories WHERE category=%s',(args.category,)).fetchone()
-            if result:result['current_resources']=conn.execute('SELECT count(*) AS n FROM health.resources WHERE is_current AND category=%s',(args.category,)).fetchone()['n']
+            category=conn.execute("SELECT category FROM health.ontology_categories WHERE category=%s OR definition->'aliases' ? %s",(args.category,args.category)).fetchone()
+            result=conn.execute('SELECT * FROM health.ontology_categories WHERE category=%s',(category['category'],)).fetchone() if category else None
+            if result:result['current_resources']=conn.execute('SELECT count(*) AS n FROM health.resources WHERE is_current AND category=%s',(result['category'],)).fetchone()['n']
         elif args.relations:
-            result=conn.execute('SELECT o.relation,o.semantics,o.description,o.establishes_causality,(SELECT count(*) FROM health.relationships r WHERE r.relation=o.relation) AS edges FROM health.ontology_relations o ORDER BY relation').fetchall()
+            result=conn.execute('''SELECT o.relation,o.status,o.semantics,o.description,o.establishes_causality,o.definition->'domain' AS domain,o.definition->'range' AS range,
+              o.definition->'qualifiers' AS qualifiers,o.definition->>'alias_of' AS alias_of,o.definition->'alias_qualifiers' AS alias_qualifiers,
+              (SELECT count(*) FROM health.relationships r WHERE r.is_current AND r.relation=o.relation) AS current_edges FROM health.ontology_relations o ORDER BY relation''').fetchall()
+        elif args.types:
+            result=conn.execute('''SELECT t.clinical_type,t.label,t.parent,t.fhir_resource,t.concept_family,t.description,
+              (SELECT count(*) FROM health.resources x WHERE x.is_current AND x.clinical_type=t.clinical_type) AS current_resources FROM health.clinical_types t ORDER BY t.parent NULLS FIRST,t.clinical_type''').fetchall()
         else:
-            result=conn.execute('SELECT o.category,o.domain,o.description,o.schema_path,(SELECT count(*) FROM health.resources x WHERE x.is_current AND x.category=o.category) AS current_resources FROM health.ontology_categories o ORDER BY domain,category').fetchall()
+            result=conn.execute('''SELECT o.category,o.subject_area,o.clinical_type,o.domain,o.description,o.schema_path,o.definition->'aliases' AS aliases,
+              (SELECT count(*) FROM health.resources x WHERE x.is_current AND x.category=o.category) AS current_resources FROM health.ontology_categories o ORDER BY subject_area,category''').fetchall()
+    elif args.command=='concepts':
+        result=conn.execute('''SELECT concept_id,label,family,clinical_type,basis,codings,note,member_count FROM health.concepts
+          WHERE (%s::text IS NULL OR family=%s) AND (%s::text IS NULL OR clinical_type=%s) AND (label ILIKE %s OR concept_id ILIKE %s)
+          ORDER BY member_count DESC,label LIMIT %s''',(args.family,args.family,args.type,args.type,'%'+args.search+'%','%'+args.search+'%',args.limit)).fetchall()
+    elif args.command=='concept':
+        concept=conn.execute('''SELECT * FROM health.concepts WHERE concept_id=%s OR concept_id=%s OR lower(label)=lower(%s)
+          ORDER BY (concept_id=%s) DESC,member_count DESC LIMIT 1''',(args.concept,'concept:'+args.concept,args.concept,args.concept)).fetchone()
+        if concept:
+            # Every current record of the concept across sources, as a dated series.
+            concept['records']=conn.execute('''SELECT x.resource_id,r.source,x.category,x.clinical_type,x.name,x.concept_basis,x.clinical_date,x.clinical_date_role,x.recorded_at,
+              x.numeric_value,x.comparator,x.value_text,x.unit_source,x.unit_ucum,x.assertion,x.evidence_kind,x.status
+              FROM health.resources x JOIN health.records r USING(record_id) WHERE x.is_current AND x.concept_id=%s
+              ORDER BY x.clinical_date DESC NULLS LAST,x.recorded_at DESC NULLS LAST LIMIT %s''',(concept['concept_id'],args.limit)).fetchall()
+        result=concept
     elif args.command=='profile':
         result=conn.execute("SELECT resource_id,name,recorded_at,assertion,evidence_kind,normalized,provenance FROM health.resources WHERE is_current AND category='patient_demographics' ORDER BY recorded_at DESC NULLS LAST,name").fetchall()
     elif args.command=='activity':
@@ -171,7 +194,9 @@ def main():
     hs=sub.add_parser('history',help='Versions of an archive or repository file across preserved history');hs.add_argument('path');hs.add_argument('--repository')
     sub.add_parser('seed',help='Store the template archive (ontology and schemas) as the first files of a new patient archive')
     sub.add_parser('export',help='Write the database archive files into this checkout for Git backup. Local-only files are reported, never deleted')
-    o=sub.add_parser('ontology',help='Show registered categories and relations, with JSON Schema for one category');o.add_argument('--category');o.add_argument('--relations',action='store_true')
+    o=sub.add_parser('ontology',help='Show registered categories, clinical types and relations, with JSON Schema for one category');o.add_argument('--category');o.add_argument('--relations',action='store_true');o.add_argument('--types',action='store_true')
+    cs=sub.add_parser('concepts',help='List concepts (tests, measurements, medications, conditions) with record counts');cs.add_argument('--search',default='');cs.add_argument('--family');cs.add_argument('--type');cs.add_argument('--limit',type=int,default=100)
+    co=sub.add_parser('concept',help='One concept and its records from every source, newest first');co.add_argument('concept',help='Concept ID, such as body_weight or concept:body_weight, or its label');co.add_argument('--limit',type=int,default=200)
     sub.add_parser('verify')
     sub.add_parser('start')
     sub.add_parser('backup')
@@ -189,7 +214,7 @@ def main():
     sub.add_parser('activity')
     sub.add_parser('profile', help='Retrieve source-backed patient-reported demographics and their report dates')
     sub.add_parser('snapshot', help='Write a complete, restore-verified snapshot for the private Git archive')
-    sub.add_parser('vitals', help='Retrieve patient-reported blood pressure and pulse plus OneBlood donor vital signs')
+    sub.add_parser('vitals', help='Retrieve vital signs from every source: patient reports, donor screening and clinical records')
     a=sub.add_parser('anthropometrics');a.add_argument('--history',action='store_true',help='Include original measurements superseded by explicit patient corrections')
     args=cli.parse_args()
     if getattr(args,'limit',100)<1 or getattr(args,'limit',100)>1000:cli.error('limit must be between 1 and 1000')

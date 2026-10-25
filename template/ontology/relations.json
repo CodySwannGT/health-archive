@@ -1,144 +1,412 @@
 {
-  "schema_version": "1.0",
-  "description": "Graph relationship types. Reprojection fails for an unregistered relation. No relation establishes causality.",
+  "schema_version": "2.0",
+  "description": "Graph relationship types. Reprojection fails for an unregistered relation, an alias or retired relation, or an edge whose endpoints fall outside the relation's domain and range. Endpoint classes are category names, type:CLINICAL_TYPE (including narrower types), or @Resource, @Document, @Patient, @User, @OntologyCategory, @Concept and @ClinicalType. No relation establishes causality.",
   "relations": [
+    {
+      "relation": "ABOUT_MEDICATION",
+      "semantics": "patient_report",
+      "description": "A patient-reported record is about a medication. The aspect qualifier says how: a dose taken, a change, a hypothesis, a preference or a response. Causality is not established.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "medication_administration",
+        "medication_change",
+        "patient_hypothesis",
+        "care_preference",
+        "medication_response"
+      ],
+      "range": [
+        "type:medication_use"
+      ],
+      "qualifiers": {
+        "aspect": {
+          "required": true,
+          "enum": [
+            "administration",
+            "change",
+            "hypothesis",
+            "preference",
+            "response"
+          ]
+        }
+      }
+    },
     {
       "relation": "ADMINISTRATION_OF_MEDICATION",
       "semantics": "patient_report",
-      "description": "Completed single dose refers to its medication identity, without implying an ongoing regimen.",
-      "establishes_causality": false
+      "description": "Earlier name for ABOUT_MEDICATION with aspect administration.",
+      "establishes_causality": false,
+      "status": "alias",
+      "domain": [
+        "medication_administration"
+      ],
+      "range": [
+        "type:medication_use"
+      ],
+      "alias_of": "ABOUT_MEDICATION",
+      "alias_qualifiers": {
+        "aspect": "administration"
+      }
     },
     {
       "relation": "BELONGS_TO_PATIENT",
       "semantics": "ownership",
-      "description": "Resource or document belongs to the patient chart.",
-      "establishes_causality": false
+      "description": "Retired: every record carries its patient_id, so per-record patient edges are no longer projected. Earlier edges remain as history.",
+      "establishes_causality": false,
+      "status": "retired",
+      "domain": [
+        "@Resource",
+        "@Document"
+      ],
+      "range": [
+        "@Patient"
+      ]
     },
     {
       "relation": "CHANGE_OF_MEDICATION",
       "semantics": "patient_report",
-      "description": "Medication change event refers to the medication identity it changes.",
-      "establishes_causality": false
+      "description": "Earlier name for ABOUT_MEDICATION with aspect change.",
+      "establishes_causality": false,
+      "status": "alias",
+      "domain": [
+        "medication_change"
+      ],
+      "range": [
+        "type:medication_use"
+      ],
+      "alias_of": "ABOUT_MEDICATION",
+      "alias_qualifiers": {
+        "aspect": "change"
+      }
+    },
+    {
+      "relation": "CONCEPT_CLINICAL_TYPE",
+      "semantics": "ontology",
+      "description": "A concept belongs to a clinical type.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@Concept"
+      ],
+      "range": [
+        "@ClinicalType"
+      ]
+    },
+    {
+      "relation": "DEFAULT_CLINICAL_TYPE",
+      "semantics": "ontology",
+      "description": "A category's records have this clinical type unless their concept is more specific.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@OntologyCategory"
+      ],
+      "range": [
+        "@ClinicalType"
+      ]
     },
     {
       "relation": "DOCUMENTED_BY",
       "semantics": "provenance",
-      "description": "Resource is documented by a searchable source document or excerpt.",
-      "establishes_causality": false
+      "description": "Record is documented by a searchable source document or excerpt.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@Resource"
+      ],
+      "range": [
+        "@Document"
+      ]
     },
     {
       "relation": "EXTRACTED_FROM_CONVERSATION_MESSAGE",
       "semantics": "verbatim_source_link",
       "description": "Reviewed record quotes this user message verbatim. Provenance only.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@Resource"
+      ],
+      "range": [
+        "conversation_message"
+      ]
     },
     {
       "relation": "INSTANCE_OF",
       "semantics": "ontology",
-      "description": "Resource is an instance of an ontology record category.",
-      "establishes_causality": false
+      "description": "Record is an instance of an ontology category.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@Resource"
+      ],
+      "range": [
+        "@OntologyCategory"
+      ]
     },
     {
       "relation": "NEXT_CONVERSATION_MESSAGE",
       "semantics": "conversation_structure",
       "description": "Message order within a conversation session.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "conversation_message"
+      ],
+      "range": [
+        "conversation_message"
+      ]
     },
     {
       "relation": "OWNS_PATIENT_PROFILE",
       "semantics": "ownership",
-      "description": "Local user account owns the patient profile.",
-      "establishes_causality": false
+      "description": "User account owns the patient chart.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@User"
+      ],
+      "range": [
+        "@Patient"
+      ]
     },
     {
       "relation": "PART_OF_CONVERSATION",
       "semantics": "conversation_structure",
       "description": "Message belongs to a conversation session.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "conversation_message"
+      ],
+      "range": [
+        "conversation_session"
+      ]
     },
     {
       "relation": "PART_OF_REPORT",
       "semantics": "source_structure",
-      "description": "Parsed laboratory observation belongs to its source report.",
-      "establishes_causality": false
+      "description": "Parsed laboratory result or commentary belongs to its source report.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "laboratory",
+        "lab_commentary"
+      ],
+      "range": [
+        "lab_report"
+      ]
     },
     {
       "relation": "PATIENT_HYPOTHESIS_ABOUT_MEDICATION",
       "semantics": "patient_hypothesis",
-      "description": "Patient hypothesis refers to a medication. Causality is not established.",
-      "establishes_causality": false
+      "description": "Earlier name for ABOUT_MEDICATION with aspect hypothesis.",
+      "establishes_causality": false,
+      "status": "alias",
+      "domain": [
+        "patient_hypothesis"
+      ],
+      "range": [
+        "type:medication_use"
+      ],
+      "alias_of": "ABOUT_MEDICATION",
+      "alias_qualifiers": {
+        "aspect": "hypothesis"
+      }
     },
     {
       "relation": "POSSIBLE_SAME_SOURCE_EVENT",
       "semantics": "unreviewed_identity_candidate",
       "description": "Records from different providers may describe the same event. A review candidate, never a merge.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "type:diagnostic_report"
+      ],
+      "range": [
+        "type:diagnostic_report"
+      ]
     },
     {
       "relation": "PREFERENCE_ABOUT_MEDICATION",
       "semantics": "patient_report",
-      "description": "Patient care preference refers to a medication.",
-      "establishes_causality": false
+      "description": "Earlier name for ABOUT_MEDICATION with aspect preference.",
+      "establishes_causality": false,
+      "status": "alias",
+      "domain": [
+        "care_preference"
+      ],
+      "range": [
+        "type:medication_use"
+      ],
+      "alias_of": "ABOUT_MEDICATION",
+      "alias_qualifiers": {
+        "aspect": "preference"
+      }
     },
     {
       "relation": "REFERENCES",
       "semantics": "patient_report",
-      "description": "Record refers to, clarifies or provides context for another record without changing it.",
-      "establishes_causality": false
+      "description": "A patient statement refers to, clarifies or gives context for another record without changing it.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "type:patient_statement",
+        "type:physical_activity"
+      ],
+      "range": [
+        "type:observation",
+        "type:patient_statement",
+        "type:medication_use"
+      ]
     },
     {
       "relation": "REPORTED_ASSOCIATION",
       "semantics": "patient_report",
       "description": "Patient-reported association between records. Causality is not established.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "reported_association"
+      ],
+      "range": [
+        "type:observation",
+        "type:patient_statement"
+      ]
     },
     {
       "relation": "REPORTED_MEDICATION_RESPONSE",
       "semantics": "patient_report",
-      "description": "Patient-reported response refers to a medication. Causality is not established.",
-      "establishes_causality": false
+      "description": "Earlier name for ABOUT_MEDICATION with aspect response.",
+      "establishes_causality": false,
+      "status": "alias",
+      "domain": [
+        "medication_response"
+      ],
+      "range": [
+        "type:medication_use"
+      ],
+      "alias_of": "ABOUT_MEDICATION",
+      "alias_qualifiers": {
+        "aspect": "response"
+      }
     },
     {
       "relation": "REPORTED_PERSISTENT_SYMPTOM",
       "semantics": "patient_report",
       "description": "Symptom reported as persisting during a treatment.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "medication_response"
+      ],
+      "range": [
+        "type:symptom"
+      ]
     },
     {
       "relation": "REPORTED_PRE_TREATMENT_SYMPTOM",
       "semantics": "patient_report",
       "description": "Symptom reported as present before a treatment.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "medication_response"
+      ],
+      "range": [
+        "type:symptom"
+      ]
     },
     {
       "relation": "REPORTED_RESPONSE_AFTER_ADMINISTRATION",
       "semantics": "patient_report",
       "description": "Patient-reported response followed a specific dose. Temporal only; causality is not established.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "medication_response"
+      ],
+      "range": [
+        "type:medication_administration"
+      ]
     },
     {
       "relation": "REPORTED_TREATMENT_GOAL",
       "semantics": "patient_report",
       "description": "Symptom the patient reports a treatment was intended to address.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "medication_response"
+      ],
+      "range": [
+        "type:symptom"
+      ]
     },
     {
       "relation": "REPORTS_DEMOGRAPHICS_FOR",
       "semantics": "patient_report",
       "description": "Demographic report describes the patient.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "patient_demographics"
+      ],
+      "range": [
+        "@Patient"
+      ]
+    },
+    {
+      "relation": "REPRESENTS_CONCEPT",
+      "semantics": "terminology",
+      "description": "Record is about this concept: a test, measurement, medication or condition. The edge's evidence kind says how it was matched: by the source's own code, by the curated concept registry, or by name.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@Resource"
+      ],
+      "range": [
+        "@Concept"
+      ]
     },
     {
       "relation": "SAME_READING_COMPONENT",
       "semantics": "patient_report",
       "description": "Systolic and diastolic values come from the same blood pressure reading.",
-      "establishes_causality": false
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "type:vital_sign"
+      ],
+      "range": [
+        "type:vital_sign"
+      ]
+    },
+    {
+      "relation": "SUBTYPE_OF",
+      "semantics": "ontology",
+      "description": "A clinical type is a narrower kind of its parent type.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@ClinicalType"
+      ],
+      "range": [
+        "@ClinicalType"
+      ]
     },
     {
       "relation": "SUPERSEDES_MEASUREMENT",
       "semantics": "patient_report",
-      "description": "Explicit patient correction replaces an earlier measurement of the same metric and date; the earlier report is retained.",
-      "establishes_causality": false
+      "description": "Explicit patient correction replaces an earlier measurement of the same metric and date; the earlier report is preserved.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "type:observation"
+      ],
+      "range": [
+        "type:observation"
+      ]
     }
   ]
 }

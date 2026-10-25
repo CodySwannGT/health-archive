@@ -1,0 +1,350 @@
+{
+  "schema_version": "2.0",
+  "description": "Clinical type hierarchy, aligned with FHIR R4 resource types. Every category has a default type; a concept can narrow it. A type with a concept family groups its records under shared concepts.",
+  "clinical_types": [
+    {
+      "clinical_type": "observation",
+      "label": "Observation",
+      "parent": null,
+      "fhir_resource": "Observation",
+      "concept_family": null,
+      "description": "A measured, observed or reported finding about the patient."
+    },
+    {
+      "clinical_type": "vital_sign",
+      "label": "Vital sign",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "measurement",
+      "description": "Blood pressure, heart rate, temperature, respiratory rate or oxygen saturation."
+    },
+    {
+      "clinical_type": "body_measurement",
+      "label": "Body measurement",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "measurement",
+      "description": "Body weight, height or body mass index."
+    },
+    {
+      "clinical_type": "body_composition",
+      "label": "Body composition",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "measurement",
+      "description": "Body fat or other composition estimates, including ranges."
+    },
+    {
+      "clinical_type": "laboratory_result",
+      "label": "Laboratory result",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "measurement",
+      "description": "A single analyte result from a laboratory or screening test."
+    },
+    {
+      "clinical_type": "laboratory_commentary",
+      "label": "Laboratory commentary",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": null,
+      "description": "Laboratory report text without a result value."
+    },
+    {
+      "clinical_type": "symptom",
+      "label": "Symptom",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "symptom",
+      "description": "A symptom the patient reports, including explicit absence."
+    },
+    {
+      "clinical_type": "exposure",
+      "label": "Exposure",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "exposure",
+      "description": "A reported intake or exposure such as alcohol, food or a substance."
+    },
+    {
+      "clinical_type": "physical_activity",
+      "label": "Physical activity",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": null,
+      "description": "An exercise routine or a single exercise session."
+    },
+    {
+      "clinical_type": "social_history_observation",
+      "label": "Social history",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "social_history",
+      "description": "Tobacco, alcohol, occupation and other social history from a clinical record."
+    },
+    {
+      "clinical_type": "diagnostic_report",
+      "label": "Diagnostic report",
+      "parent": null,
+      "fhir_resource": "DiagnosticReport",
+      "concept_family": null,
+      "description": "A laboratory or diagnostic report that groups results."
+    },
+    {
+      "clinical_type": "medication_use",
+      "label": "Medication use",
+      "parent": null,
+      "fhir_resource": "MedicationStatement",
+      "concept_family": null,
+      "description": "Any record about taking, prescribing or changing a medication or supplement."
+    },
+    {
+      "clinical_type": "medication_statement",
+      "label": "Medication statement",
+      "parent": "medication_use",
+      "fhir_resource": "MedicationStatement",
+      "concept_family": "medication",
+      "description": "A medication or supplement regimen the patient takes or took."
+    },
+    {
+      "clinical_type": "medication_request",
+      "label": "Medication request",
+      "parent": "medication_use",
+      "fhir_resource": "MedicationRequest",
+      "concept_family": "medication",
+      "description": "A prescription."
+    },
+    {
+      "clinical_type": "medication_administration",
+      "label": "Medication administration",
+      "parent": "medication_use",
+      "fhir_resource": "MedicationAdministration",
+      "concept_family": "medication",
+      "description": "A single dose given or taken."
+    },
+    {
+      "clinical_type": "medication_change",
+      "label": "Medication change",
+      "parent": "medication_use",
+      "fhir_resource": "MedicationStatement",
+      "concept_family": null,
+      "description": "A start, stop or dose change of a regimen."
+    },
+    {
+      "clinical_type": "clinical_care",
+      "label": "Clinical care",
+      "parent": null,
+      "fhir_resource": null,
+      "concept_family": null,
+      "description": "Care delivery records from a clinical source."
+    },
+    {
+      "clinical_type": "condition",
+      "label": "Condition",
+      "parent": "clinical_care",
+      "fhir_resource": "Condition",
+      "concept_family": "condition",
+      "description": "A diagnosis or problem recorded by a clinician."
+    },
+    {
+      "clinical_type": "encounter",
+      "label": "Encounter",
+      "parent": "clinical_care",
+      "fhir_resource": "Encounter",
+      "concept_family": null,
+      "description": "A visit or other care encounter."
+    },
+    {
+      "clinical_type": "encounter_reason",
+      "label": "Encounter reason",
+      "parent": "clinical_care",
+      "fhir_resource": "Encounter",
+      "concept_family": null,
+      "description": "The stated reason for a visit."
+    },
+    {
+      "clinical_type": "procedure",
+      "label": "Procedure",
+      "parent": "clinical_care",
+      "fhir_resource": "Procedure",
+      "concept_family": "procedure",
+      "description": "A procedure performed on the patient."
+    },
+    {
+      "clinical_type": "immunization",
+      "label": "Immunization",
+      "parent": "clinical_care",
+      "fhir_resource": "Immunization",
+      "concept_family": "immunization",
+      "description": "A vaccine given."
+    },
+    {
+      "clinical_type": "allergy",
+      "label": "Allergy",
+      "parent": "clinical_care",
+      "fhir_resource": "AllergyIntolerance",
+      "concept_family": "allergy",
+      "description": "An allergy or intolerance, or a recorded absence of one."
+    },
+    {
+      "clinical_type": "care_plan",
+      "label": "Care plan",
+      "parent": "clinical_care",
+      "fhir_resource": "CarePlan",
+      "concept_family": null,
+      "description": "A clinician care plan."
+    },
+    {
+      "clinical_type": "care_team",
+      "label": "Care team",
+      "parent": "clinical_care",
+      "fhir_resource": "CareTeam",
+      "concept_family": null,
+      "description": "Clinicians responsible for the patient."
+    },
+    {
+      "clinical_type": "goal",
+      "label": "Goal",
+      "parent": "clinical_care",
+      "fhir_resource": "Goal",
+      "concept_family": null,
+      "description": "A clinical goal."
+    },
+    {
+      "clinical_type": "clinical_note",
+      "label": "Clinical note",
+      "parent": "clinical_care",
+      "fhir_resource": "DocumentReference",
+      "concept_family": null,
+      "description": "A clinician-authored note."
+    },
+    {
+      "clinical_type": "patient_instruction",
+      "label": "Patient instruction",
+      "parent": "clinical_care",
+      "fhir_resource": "CarePlan",
+      "concept_family": null,
+      "description": "Instructions given to the patient."
+    },
+    {
+      "clinical_type": "administrative",
+      "label": "Administrative",
+      "parent": null,
+      "fhir_resource": null,
+      "concept_family": null,
+      "description": "Administrative records."
+    },
+    {
+      "clinical_type": "coverage",
+      "label": "Coverage",
+      "parent": "administrative",
+      "fhir_resource": "Coverage",
+      "concept_family": null,
+      "description": "Insurance coverage."
+    },
+    {
+      "clinical_type": "patient_statement",
+      "label": "Patient statement",
+      "parent": null,
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "An interpretation, preference or context the patient states. Never a clinical finding."
+    },
+    {
+      "clinical_type": "patient_hypothesis",
+      "label": "Patient hypothesis",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "What the patient thinks may explain something. Causality is not established."
+    },
+    {
+      "clinical_type": "reported_association",
+      "label": "Reported association",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "A link the patient reports between two things. Causality is not established."
+    },
+    {
+      "clinical_type": "medication_response",
+      "label": "Medication response",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "How the patient reports responding to a treatment."
+    },
+    {
+      "clinical_type": "care_preference",
+      "label": "Care preference",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "What the patient wants or does not want from care."
+    },
+    {
+      "clinical_type": "measurement_context",
+      "label": "Measurement context",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "Conditions around a measurement, such as time of day or what preceded it."
+    },
+    {
+      "clinical_type": "recurring_pattern",
+      "label": "Recurring pattern",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "A pattern the patient reports recurring over time."
+    },
+    {
+      "clinical_type": "patient_context",
+      "label": "Patient context",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "Background history or circumstances the patient provides."
+    },
+    {
+      "clinical_type": "patient_profile",
+      "label": "Patient profile",
+      "parent": null,
+      "fhir_resource": "Patient",
+      "concept_family": null,
+      "description": "Facts about the patient as a person."
+    },
+    {
+      "clinical_type": "demographics",
+      "label": "Demographics",
+      "parent": "patient_profile",
+      "fhir_resource": "Patient",
+      "concept_family": null,
+      "description": "Age, sex and other demographics the patient reports."
+    },
+    {
+      "clinical_type": "conversation",
+      "label": "Conversation",
+      "parent": null,
+      "fhir_resource": "Communication",
+      "concept_family": null,
+      "description": "The preserved health conversation, as audit evidence."
+    },
+    {
+      "clinical_type": "conversation_message",
+      "label": "Conversation message",
+      "parent": "conversation",
+      "fhir_resource": "Communication",
+      "concept_family": null,
+      "description": "One user or assistant message, verbatim."
+    },
+    {
+      "clinical_type": "conversation_session",
+      "label": "Conversation session",
+      "parent": "conversation",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "One conversation thread."
+    }
+  ]
+}

@@ -1,0 +1,262 @@
+{
+  "schema_version": "2.0",
+  "description": "Curated concepts. family defaults to the clinical type's concept family; only records of that family join the concept. A record joins a concept when its source code is listed under match.codes, or its normalized name is listed under match.names or matches match.name_patterns (optionally limited to match.categories). Codings marked curated_standard_code are mappings made here, never codes the source supplied; they are not copied into records. Records with an unlisted source code join a concept for that code; others join a concept for their normalized name.",
+  "concepts": [
+    {
+      "concept": "body_weight",
+      "label": "Body weight",
+      "clinical_type": "body_measurement",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "29463-7",
+          "display": "Body weight",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "body weight",
+          "weight"
+        ],
+        "codes": [
+          "http://loinc.org|29463-7"
+        ]
+      }
+    },
+    {
+      "concept": "body_height",
+      "label": "Body height",
+      "clinical_type": "body_measurement",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "8302-2",
+          "display": "Body height",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "body height",
+          "height"
+        ],
+        "codes": [
+          "http://loinc.org|8302-2"
+        ]
+      }
+    },
+    {
+      "concept": "body_mass_index",
+      "label": "Body mass index",
+      "clinical_type": "body_measurement",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "39156-5",
+          "display": "Body mass index (BMI) [Ratio]",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "bmi",
+          "body mass index"
+        ],
+        "codes": [
+          "http://loinc.org|39156-5"
+        ]
+      }
+    },
+    {
+      "concept": "body_fat_percentage",
+      "label": "Body fat percentage",
+      "clinical_type": "body_composition",
+      "codings": [],
+      "match": {
+        "names": [
+          "estimated body fat percentage",
+          "body fat percentage",
+          "body fat"
+        ]
+      }
+    },
+    {
+      "concept": "systolic_blood_pressure",
+      "label": "Systolic blood pressure",
+      "clinical_type": "vital_sign",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "8480-6",
+          "display": "Systolic blood pressure",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "systolic blood pressure",
+          "systolic"
+        ],
+        "codes": [
+          "http://loinc.org|8480-6"
+        ]
+      }
+    },
+    {
+      "concept": "diastolic_blood_pressure",
+      "label": "Diastolic blood pressure",
+      "clinical_type": "vital_sign",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "8462-4",
+          "display": "Diastolic blood pressure",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "diastolic blood pressure",
+          "diastolic"
+        ],
+        "codes": [
+          "http://loinc.org|8462-4"
+        ]
+      }
+    },
+    {
+      "concept": "heart_rate",
+      "label": "Heart rate (pulse)",
+      "clinical_type": "vital_sign",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "8867-4",
+          "display": "Heart rate",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "heart rate",
+          "pulse",
+          "pulse rate"
+        ],
+        "codes": [
+          "http://loinc.org|8867-4"
+        ]
+      }
+    },
+    {
+      "concept": "body_temperature",
+      "label": "Body temperature",
+      "clinical_type": "vital_sign",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "8310-5",
+          "display": "Body temperature",
+          "basis": "curated_standard_code"
+        }
+      ],
+      "match": {
+        "names": [
+          "body temperature",
+          "temperature"
+        ],
+        "codes": [
+          "http://loinc.org|8310-5"
+        ]
+      }
+    },
+    {
+      "concept": "respiratory_rate",
+      "label": "Respiratory rate",
+      "clinical_type": "vital_sign",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "9279-1",
+          "display": "Respiratory rate",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "respiratory rate"
+        ],
+        "codes": [
+          "http://loinc.org|9279-1"
+        ]
+      }
+    },
+    {
+      "concept": "oxygen_saturation",
+      "label": "Oxygen saturation",
+      "clinical_type": "vital_sign",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "59408-5",
+          "display": "Oxygen saturation in Arterial blood by Pulse oximetry",
+          "basis": "observed_in_source"
+        }
+      ],
+      "match": {
+        "names": [
+          "oxygen saturation",
+          "spo2"
+        ],
+        "codes": [
+          "http://loinc.org|59408-5"
+        ]
+      }
+    },
+    {
+      "concept": "donor_hemoglobin",
+      "label": "Hemoglobin (donor screening)",
+      "clinical_type": "laboratory_result",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "718-7",
+          "display": "Hemoglobin [Mass/volume] in Blood",
+          "basis": "curated_standard_code"
+        }
+      ],
+      "match": {
+        "names": [
+          "iron count"
+        ],
+        "categories": [
+          "blood_donor_screening"
+        ]
+      },
+      "note": "Blood donor centers report a fingerstick hemoglobin, in g/dL, as \"iron count\". It is not a serum iron test."
+    },
+    {
+      "concept": "donor_total_cholesterol",
+      "label": "Total cholesterol (donor screening)",
+      "clinical_type": "laboratory_result",
+      "codings": [
+        {
+          "system": "http://loinc.org",
+          "code": "2093-3",
+          "display": "Cholesterol [Mass/volume] in Serum or Plasma",
+          "basis": "curated_standard_code"
+        }
+      ],
+      "match": {
+        "names": [
+          "cholesterol",
+          "total cholesterol"
+        ],
+        "categories": [
+          "blood_donor_screening"
+        ]
+      },
+      "note": "Donor screening cholesterol. Kept separate from laboratory cholesterol results because the specimen and method differ."
+    }
+  ]
+}

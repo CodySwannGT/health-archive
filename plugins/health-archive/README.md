@@ -43,6 +43,7 @@ Scopes: `health.read` for queries, `health.write` for `record_narrative`, `recor
 | `search`, `fetch` | Search and fetch source documents. These follow the ChatGPT connector search/fetch shape |
 | `search_archive` | Search with excerpts and options for research, conversation or history |
 | `labs`, `medications`, `symptoms`, `vitals`, `anthropometrics`, `activity`, `profile`, `timeline` | Domain queries |
+| `concepts`, `concept` | Tests, measurements and medications that join records across sources, and one concept's records over time |
 | `get_record`, `get_document`, `graph`, `ontology`, `status`, `query` | Records, documents, graph, ontology, status and bounded read-only SQL |
 | `record_narrative`, `record_medication`, `capture_conversation` | Writes. Each runs in one transaction against the database archive |
 

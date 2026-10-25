@@ -135,7 +135,7 @@ def build(auth_provider=None, issuer_url=None):
 
     @server.tool(annotations=READ)
     async def labs(name: str = '', limit: int = 100) -> dict:
-        """Exact laboratory values with source dates, units, reference ranges and flags. Filter by analyte name."""
+        """Exact laboratory values from every source with dates, units, reference ranges, flags and concepts. Filter by analyte name or concept label."""
         return await _query('labs', name=name, limit=limit)
 
     @server.tool(annotations=READ)
@@ -150,12 +150,12 @@ def build(auth_provider=None, issuer_url=None):
 
     @server.tool(annotations=READ)
     async def vitals() -> dict:
-        """Patient-reported blood pressure and pulse plus donor-center vital signs."""
+        """Vital signs from every source: patient reports, donor screening and clinical records, each with its concept."""
         return await _query('vitals')
 
     @server.tool(annotations=READ)
     async def anthropometrics(history: bool = False) -> dict:
-        """Weight, height, body composition and measurement context. `history` includes superseded measurements."""
+        """Weight, height, BMI and body composition from every source, plus measurement context. `history` includes superseded measurements."""
         return await _query('anthropometrics', history=history)
 
     @server.tool(annotations=READ)
@@ -188,13 +188,26 @@ def build(auth_provider=None, issuer_url=None):
 
     @server.tool(annotations=READ)
     async def graph(record_id: str | None = None, limit: int = 40) -> dict:
-        """Graph relationships around a resource, or around the patient when omitted."""
+        """Graph relationships around a resource, a concept (concept:ID), a clinical type (type:ID), or the patient when omitted."""
         return await _query('graph', record_id=record_id, limit=limit)
 
     @server.tool(annotations=READ)
-    async def ontology(category: str | None = None, relations: bool = False) -> dict:
-        """Registered record categories and relationship types. `category` returns its JSON Schema for recording."""
-        return await _query('ontology', category=category, relations=relations)
+    async def ontology(category: str | None = None, relations: bool = False, types: bool = False) -> dict:
+        """Registered record categories, clinical types (`types`) and relationship types with their allowed endpoints (`relations`).
+        `category` returns its JSON Schema for recording."""
+        return await _query('ontology', category=category, relations=relations, types=types)
+
+    @server.tool(annotations=READ)
+    async def concepts(search: str = '', family: str | None = None, type: str | None = None, limit: int = 100) -> dict:
+        """Concepts such as body weight, a laboratory test, a medication or a condition, with record counts and codes.
+        Filter by label, family (measurement, medication, condition, symptom, ...) or clinical type."""
+        return await _query('concepts', search=search, family=family, type=type, limit=limit)
+
+    @server.tool(annotations=READ)
+    async def concept(concept: str, limit: int = 200) -> dict:
+        """One concept (ID such as body_weight, or its label) and its records from every source, newest first.
+        Use it for trends: blood pressure, weight or a lab test over time across patient reports and clinical records."""
+        return await _query('concept', concept=concept, limit=limit)
 
     @server.tool(annotations=READ)
     async def query(sql: str, limit: int = 200) -> dict:

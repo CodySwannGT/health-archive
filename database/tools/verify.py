@@ -22,6 +22,36 @@ def verify():
             ROOT=ingest.ROOT=checkout
 
 
+def _verify_semantics(conn,patient):
+    """Current records carry registered clinical types and concepts, and current edges follow the relation rules."""
+    from semantics import Registry, concept_eligible
+    definition=lambda table,key:[r['definition'] for r in conn.execute(f'SELECT definition FROM health.{table} WHERE patient_id=%s ORDER BY {key}',(patient,))]
+    types=[dict(r) for r in conn.execute('SELECT clinical_type,label,parent,fhir_resource,concept_family,description FROM health.clinical_types WHERE patient_id=%s',(patient,))]
+    registry=Registry(definition('ontology_categories','category'),definition('ontology_relations','relation'),types,[])
+    resources={r['resource_id']:r for r in conn.execute('SELECT resource_id,category,name,clinical_type,concept_id,assertion FROM health.resources WHERE patient_id=%s AND is_current',(patient,))}
+    untyped=[rid for rid,r in resources.items() if r['clinical_type'] not in registry.types]
+    assert not untyped,('records without a registered clinical type',untyped[:5])
+    concepts={r['concept_id'] for r in conn.execute('SELECT concept_id FROM health.concepts WHERE patient_id=%s',(patient,))}
+    missing=[rid for rid,r in resources.items() if concept_eligible(registry,r['category'],r['name'],r['assertion']) and r['concept_id'] not in concepts]
+    assert not missing,('concept-eligible records without a concept',missing[:5])
+    every={r['resource_id']:r for r in conn.execute('SELECT resource_id,category,clinical_type FROM health.resources WHERE patient_id=%s',(patient,))}
+    documents={r['document_id'] for r in conn.execute('SELECT document_id FROM health.documents WHERE patient_id=%s',(patient,))}
+    users={r['user_id'] for r in conn.execute('SELECT user_id FROM health.patient_access WHERE patient_id=%s',(patient,))}
+    def endpoint(node):
+        if node in every:return ('@Resource',every[node]['category'],every[node]['clinical_type'])
+        if node==patient:return ('@Patient',None,None)
+        if node in users:return ('@User',None,None)
+        if node in documents:return ('@Document',None,None)
+        for prefix,kind in (('ontology:','@OntologyCategory'),('concept:','@Concept'),('type:','@ClinicalType')):
+            if node.startswith(prefix):return (kind,None,None)
+        return None
+    edges=[(r['from_id'],r['to_id'],r['relation'],r['qualifiers']) for r in conn.execute('SELECT from_id,to_id,relation,qualifiers FROM health.relationships WHERE patient_id=%s AND is_current',(patient,))]
+    problems=registry.edge_problems(edges,endpoint)
+    assert not problems,problems[:10]
+    return {'clinical_types':len(registry.types),'concepts':len(concepts),'current_records_with_concepts':sum(1 for r in resources.values() if r['concept_id']),
+            'current_edges_follow_relation_rules':len(edges)}
+
+
 def _verify(checkout):
     from workspace import current_artifacts, local_drift, materialize, tree
     PATIENT=current_account().patient_id
@@ -42,10 +72,11 @@ def _verify(checkout):
         assert not unregistered,unregistered
         unregistered=[r['relation'] for r in conn.execute('SELECT DISTINCT relation FROM health.relationships WHERE patient_id=%s',(PATIENT,)) if r['relation'] not in relations]
         assert not unregistered,unregistered
+        semantics=_verify_semantics(conn,PATIENT)
         missing=conn.execute("""SELECT count(*) AS n FROM health.resources x WHERE x.is_current AND x.patient_id=%s AND NOT EXISTS
           (SELECT 1 FROM health.relationships r WHERE r.patient_id=x.patient_id AND r.from_id=x.resource_id AND r.relation='INSTANCE_OF' AND r.to_id='ontology:'||x.category)""",(PATIENT,)).fetchone()['n']
         assert missing==0,missing
-        checks['ontology']={'categories':len(categories),'relations':len(relations),'current_resources_typed':True}
+        checks['ontology']={'categories':len(categories),'relations':len(relations),'current_resources_typed':True,**semantics}
         current_payloads={r['record_id']:r['payload'] for r in conn.execute('SELECT record_id,payload FROM health.current_records WHERE patient_id=%s',(PATIENT,))}
         version_payloads={(r['record_id'],r['version_sha256']):r['payload'] for r in conn.execute('SELECT v.record_id,v.version_sha256,v.payload FROM health.record_versions v JOIN health.records r USING(record_id) WHERE r.patient_id=%s',(PATIENT,))}
         observations={}
@@ -145,9 +176,11 @@ def _verify(checkout):
         assert aliases==expected_aliases
         checks['stable_parsed_result_aliases']=aliases
         graph=conn.execute('SELECT health.graph_counts(%s) AS counts',(PATIENT,)).fetchone()['counts']
-        expected_nodes=conn.execute('SELECT (SELECT count(*) FROM health.resources WHERE patient_id=%(p)s)+(SELECT count(*) FROM health.documents WHERE patient_id=%(p)s)+(SELECT count(*) FROM health.ontology_categories WHERE patient_id=%(p)s)+2 AS n',{'p':PATIENT}).fetchone()['n']
+        expected_nodes=conn.execute('''SELECT (SELECT count(*) FROM health.resources WHERE patient_id=%(p)s)+(SELECT count(*) FROM health.documents WHERE patient_id=%(p)s)
+          +(SELECT count(*) FROM health.ontology_categories WHERE patient_id=%(p)s)+(SELECT count(*) FROM health.clinical_types WHERE patient_id=%(p)s)
+          +(SELECT count(*) FROM health.concepts WHERE patient_id=%(p)s)+2 AS n''',{'p':PATIENT}).fetchone()['n']
         assert graph['vertices']==expected_nodes,(graph,expected_nodes)
-        expected_edges=conn.execute("SELECT count(*) AS n FROM health.relationships r WHERE r.patient_id=%(p)s AND (r.relation<>'INSTANCE_OF' OR r.to_id IN (SELECT 'ontology:'||category FROM health.ontology_categories WHERE patient_id=%(p)s))",{'p':PATIENT}).fetchone()['n']
+        expected_edges=conn.execute('SELECT count(*) AS n FROM health.relationships WHERE patient_id=%(p)s AND is_current',{'p':PATIENT}).fetchone()['n']
         assert graph['edges']==expected_edges,(graph,expected_edges)
         checks['graph']=graph
         checks['unmerged_identity_candidates']=conn.execute("SELECT count(*) AS n FROM health.relationships WHERE patient_id=%s AND relation='POSSIBLE_SAME_SOURCE_EVENT'",(PATIENT,)).fetchone()['n']

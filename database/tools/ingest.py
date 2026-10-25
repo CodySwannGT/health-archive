@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from psycopg import sql
 from common import ROOT, DB, MODEL, PARSER, Jsonb, connect, current_account, digest, canonical, cypher, embedding_model
 from measurement_corrections import measurement_supersessions
+from semantics import Registry, assign_concepts
 
 NUM = re.compile(r'^\s*(<=|>=|<|>|≤|≥)?\s*(-?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)\s*([HL])?\s*$')
 UCUM = {'mg/dL':'mg/dL','g/dL':'g/dL','ng/dL':'ng/dL','ng/mL':'ng/mL','pg/mL':'pg/mL',
@@ -95,6 +96,11 @@ class Importer:
         self.observation_occurrences = collections.Counter()
         self.categories = {}
         self.relations = set()
+        # Per projected resource: (category, name, code system, code, assertion), for concepts.
+        self.meta = {}
+        self.doc_ids = set()
+        self.edges = []
+        self.clinical_types = {}
         # Read-before-write lookups are cached under the ingestion advisory lock.
         # This permits pipelining writes without changing source/version identity.
         self.known_contents = self.known_documents = self.known_narratives = self.known_aliases = None
@@ -212,18 +218,23 @@ class Importer:
                 code_system,code,Jsonb(normalized),Jsonb(prov),projection)
         fields='resource_id,record_id,patient_id,resource_type,category,name,clinical_date,clinical_date_role,recorded_at,assertion,evidence_kind,status,numeric_value,comparator,value_text,unit_source,unit_ucum,reference_text,flag_source,code_system,code,normalized,provenance,projection_sha256'.split(',')
         updates=sql.SQL(',').join(sql.SQL('{}=EXCLUDED.{}').format(sql.Identifier(f),sql.Identifier(f)) for f in fields[3:])
-        self.conn.execute(sql.SQL('INSERT INTO health.resources ({}) VALUES ({}) ON CONFLICT (resource_id) DO UPDATE SET {} WHERE health.resources.projection_sha256<>EXCLUDED.projection_sha256 OR health.resources.provenance<>EXCLUDED.provenance').format(sql.SQL(',').join(sql.Identifier(f) for f in fields),sql.SQL(',').join(sql.Placeholder() for _ in values),updates),values)
+        self.conn.execute(sql.SQL('INSERT INTO health.resources ({}) VALUES ({}) ON CONFLICT (resource_id) DO UPDATE SET {} WHERE health.resources.projection_sha256<>EXCLUDED.projection_sha256 OR health.resources.provenance<>EXCLUDED.provenance OR health.resources.category<>EXCLUDED.category').format(sql.SQL(',').join(sql.Identifier(f) for f in fields),sql.SQL(',').join(sql.Placeholder() for _ in values),updates),values)
         self.stats['new_resource_versions'] += self.conn.execute('INSERT INTO health.resource_versions VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING', (rid,projection,Jsonb(normalized),Jsonb(prov),self.run)).rowcount
         self.resource_ids.add(rid)
         self.categories[rid]=category
-        self.relationship(rid,self.patient,'BELONGS_TO_PATIENT','ownership',{})
+        self.meta[rid]=(category,name,code_system,code,assertion)
+        # Patient ownership is each row's patient_id; no per-record patient edge.
         self.relationship(rid,'ontology:'+category,'INSTANCE_OF','ontology',{})
 
-    def relationship(self, a, b, relation, evidence, provenance):
+    def relationship(self, a, b, relation, evidence, provenance, qualifiers=None):
         self.relations.add(relation)
-        key=digest([self.patient,a,b,relation])
-        self.conn.execute('INSERT INTO health.relationships VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (relationship_id) DO UPDATE SET evidence_kind=EXCLUDED.evidence_kind,provenance=EXCLUDED.provenance',
-                          (key,self.patient,a,b,relation,evidence,Jsonb(provenance)))
+        self.edges.append((a,b,relation,qualifiers or {}))
+        key=digest([self.patient,a,b,relation]+([qualifiers] if qualifiers else []))
+        # Edges seen in this run are current; earlier ones stay as history.
+        self.conn.execute('''INSERT INTO health.relationships(relationship_id,patient_id,from_id,to_id,relation,evidence_kind,provenance,qualifiers,last_seen_run,is_current)
+          VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,true) ON CONFLICT (relationship_id) DO UPDATE SET evidence_kind=EXCLUDED.evidence_kind,provenance=EXCLUDED.provenance,
+          qualifiers=EXCLUDED.qualifiers,last_seen_run=EXCLUDED.last_seen_run,is_current=true''',
+                          (key,self.patient,a,b,relation,evidence,Jsonb(provenance),Jsonb(qualifiers or {}),self.run))
 
     def document(self, key, source, title, path, text, evidence='source_record', rid=None, clinical=None, provenance=None, current=True):
         if not text or not text.strip(): return
@@ -233,6 +244,7 @@ class Importer:
         self.conn.execute('INSERT INTO health.documents VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (document_id) DO UPDATE SET is_current=EXCLUDED.is_current',
                           (did,self.patient,source,title,path,rid,clinical,evidence,version,text,Jsonb(provenance or {}),current))
         if current: self.current_docs.add(did)
+        self.doc_ids.add(did)
         if not existed:
             if self.known_documents is not None: self.known_documents.add(did)
             for ordinal,start in enumerate(range(0,len(text),1250)):
@@ -241,7 +253,6 @@ class Importer:
                                   (digest([did,ordinal]),did,self.patient,ordinal,start,end,text[start:end]))
                 if end == len(text): break
             self.stats['new_documents']+=1
-        self.relationship(did,self.patient,'BELONGS_TO_PATIENT','ownership',{})
         if rid: self.relationship(rid,did,'DOCUMENTED_BY',evidence,provenance or {})
 
     def issue(self, path, native, reason, details, severity='info'):
@@ -279,7 +290,7 @@ def import_labcorp(imp):
         native=r['report_id']
         clinical=date(r.get('service_date') or r.get('collection_date') or r.get('listed_date'))
         rid,vh=imp.record('labcorp','report',native,r,path)
-        imp.resource(rid,'Labcorp report '+str(native),'DiagnosticReport','laboratory',clinical,
+        imp.resource(rid,'Labcorp report '+str(native),'DiagnosticReport','lab_report',clinical,
                      'service_or_collection_date',recorded=r.get('captured_at'),details={'archive_kind':r['archive_kind'],'official_pdf_status':r.get('official_pdf_status')},provenance={'path':path,'source_report_id':native})
         text=r.get('text') or ''
         text+='\n\n'+'\n'.join(n.get('title','')+'\n'+n.get('text','') for n in r.get('notes',[]))
@@ -350,7 +361,7 @@ def import_quest(imp):
     for r in rows(path):
         native=r['report_id'];clinical=date(r.get('collection_date') or r.get('listed_service_date_source'))
         rid,vh=imp.record('quest','report',native,r,path)
-        imp.resource(rid,'Quest report '+native,'DiagnosticReport','laboratory',clinical,'collection_date' if r.get('collection_date') else 'listed_service_date',recorded=r.get('captured_at'),details={'archive_kind':r['archive_kind'],'specimen_id':r['specimen_id']},provenance={'path':path,'pdf_path':r.get('pdf_path')})
+        imp.resource(rid,'Quest report '+native,'DiagnosticReport','lab_report',clinical,'collection_date' if r.get('collection_date') else 'listed_service_date',recorded=r.get('captured_at'),details={'archive_kind':r['archive_kind'],'specimen_id':r['specimen_id']},provenance={'path':path,'pdf_path':r.get('pdf_path')})
         texts=[('header',r.get('header_text',''))]+[(f"page:{p['page_number']}",p['text']) for p in r.get('pages',[])]
         if r.get('rows'):texts.append(('portal','\n\n'.join(s.get('raw_text','') for s in r['rows'])))
         for key,text in texts:
@@ -422,11 +433,11 @@ def import_medications(imp):
     for r in sources['change-log']+sources['reported-change-log']:
         med=imp.lookup.get(('patient_medications',r.get('medication_id')))
         event=imp.lookup[('patient_medications',r['event_id'])]
-        if med:imp.relationship(event,med,'CHANGE_OF_MEDICATION','patient_report',r['provenance'])
+        if med:imp.relationship(event,med,'ABOUT_MEDICATION','patient_report',r['provenance'],{'aspect':'change'})
     for r in sources['reported-administrations']:
         med=imp.lookup.get(('patient_medications',r['medication_id']))
         administration=imp.lookup[('patient_medications',r['administration_id'])]
-        if med:imp.relationship(administration,med,'ADMINISTRATION_OF_MEDICATION','patient_report',r['provenance'])
+        if med:imp.relationship(administration,med,'ABOUT_MEDICATION','patient_report',r['provenance'],{'aspect':'administration'})
     for p in (ROOT/'meds/snapshots').glob('*/*.jsonl'):
         if p.name not in ('medications.jsonl','change-log.jsonl'):continue
         for r in rows(str(p.relative_to(ROOT))):
@@ -472,7 +483,7 @@ def import_symptoms(imp):
             tid=imp.lookup.get(('patient_symptoms',target))
             if tid:imp.relationship(rid,tid,'REPORTED_ASSOCIATION' if r['record_type']=='reported_association' else 'REFERENCES','patient_report',{'causality':'not_established','source_record_id':r['record_id']})
         mid=imp.lookup.get(('patient_medications',d.get('medication_id')))
-        if mid:imp.relationship(rid,mid,'REPORTED_MEDICATION_RESPONSE','patient_report',{'source_record_id':r['record_id']})
+        if mid:imp.relationship(rid,mid,'ABOUT_MEDICATION','patient_report',{'source_record_id':r['record_id']},{'aspect':'response'})
         for native in d.get('related_administration_ids',[]):
             administration=imp.lookup.get(('patient_medications',native))
             if administration:imp.relationship(rid,administration,'REPORTED_RESPONSE_AFTER_ADMINISTRATION','patient_report',{'causality':'not_established','source_record_id':r['record_id']})
@@ -488,11 +499,11 @@ def import_symptoms(imp):
         if r['record_type']=='care_preference':
             for target in d.get('medication_ids',[]):
                 tid=imp.lookup.get(('patient_medications',target))
-                if tid:imp.relationship(rid,tid,'PREFERENCE_ABOUT_MEDICATION','patient_report',r['provenance'])
+                if tid:imp.relationship(rid,tid,'ABOUT_MEDICATION','patient_report',r['provenance'],{'aspect':'preference'})
         if r['record_type']=='patient_hypothesis':
             for target in d.get('medication_ids',[]):
                 tid=imp.lookup.get(('patient_medications',target))
-                if tid:imp.relationship(rid,tid,'PATIENT_HYPOTHESIS_ABOUT_MEDICATION','patient_hypothesis',{'causality':'not_established','source_record_id':r['record_id']})
+                if tid:imp.relationship(rid,tid,'ABOUT_MEDICATION','patient_hypothesis',{'causality':'not_established','source_record_id':r['record_id']},{'aspect':'hypothesis'})
     for p in (ROOT/'symptoms/narratives').glob('*/revisions/*/records.jsonl'):
         for r in rows(str(p.relative_to(ROOT))):imp.record('patient_symptoms',r['record_type'],r['record_id'],r,str(p.relative_to(ROOT)),current=False)
     # Patient-reported clinical history gathered alongside research. The first file keeps
@@ -508,7 +519,7 @@ def import_vitals(imp):
     path='vitals/oneblood/observations.jsonl'
     for r in rows(path):
         rid,vh=imp.record('oneblood','vital',r['observation_id'],r,path)
-        imp.resource(rid,r['metric'].replace('_',' '),'Observation','vital-signs',r['measurement_date'],'measurement_date',
+        imp.resource(rid,r['metric'].replace('_',' '),'Observation','blood_donor_screening',r['measurement_date'],'measurement_date',
                      status=r['status'],value=r['value'],numeric=r['value'],unit=r['unit'],details=r,provenance=r['provenance'])
         imp.document(r['observation_id'],'oneblood',r['metric'].replace('_',' '),path,f"{r['measurement_date']}: {r['name_source']}: {r['value']} {r['unit']} ({r['status']})",rid=rid,clinical=r['measurement_date'],provenance=r['provenance'])
 
@@ -630,6 +641,9 @@ def import_ontology(imp):
     """Load the ontology definitions the archive enforces into queryable tables."""
     categories=load('ontology/categories.json')['categories']
     relations=load('ontology/relations.json')['relations']
+    clinical_types=load('ontology/clinical-types.json')['clinical_types']
+    concepts=load('ontology/concepts.json')['concepts']
+    imp.registry=Registry(categories,relations,clinical_types,concepts)
     schemas={}
     for c in categories:
         if c['schema_path'] and c['schema_path'] not in schemas:schemas[c['schema_path']]=load(c['schema_path'])
@@ -640,18 +654,71 @@ def import_ontology(imp):
         for b in schema.get('oneOf',[]):
             if b.get('properties',{}).get('record_type',{}).get('const')==c['category']:return {**b,'$defs':schema.get('$defs',{})}
         return schema
+    conn,run,patient=imp.conn,imp.run,imp.patient
     for c in categories:
         definition={**c,'json_schema':branch(c)}
-        imp.conn.execute('''INSERT INTO health.ontology_categories(category,domain,description,schema_path,json_schema,definition_sha256,updated_run,patient_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (patient_id,category) DO UPDATE SET
-          domain=EXCLUDED.domain,description=EXCLUDED.description,schema_path=EXCLUDED.schema_path,json_schema=EXCLUDED.json_schema,
-          definition_sha256=EXCLUDED.definition_sha256,updated_run=EXCLUDED.updated_run WHERE health.ontology_categories.definition_sha256<>EXCLUDED.definition_sha256''',
-          (c['category'],c['domain'],c['description'],c['schema_path'],Jsonb(definition['json_schema']) if definition['json_schema'] else None,digest(definition),imp.run,imp.patient))
+        conn.execute('''INSERT INTO health.ontology_categories(category,domain,description,schema_path,json_schema,definition_sha256,updated_run,patient_id,subject_area,clinical_type,definition) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (patient_id,category) DO UPDATE SET
+          domain=EXCLUDED.domain,description=EXCLUDED.description,schema_path=EXCLUDED.schema_path,json_schema=EXCLUDED.json_schema,subject_area=EXCLUDED.subject_area,
+          clinical_type=EXCLUDED.clinical_type,definition=EXCLUDED.definition,definition_sha256=EXCLUDED.definition_sha256,updated_run=EXCLUDED.updated_run WHERE health.ontology_categories.definition_sha256<>EXCLUDED.definition_sha256''',
+          (c['category'],c['domain'],c['description'],c['schema_path'],Jsonb(definition['json_schema']) if definition['json_schema'] else None,digest(definition),run,patient,c['subject_area'],c['clinical_type'],Jsonb(c)))
     for r in relations:
-        imp.conn.execute('''INSERT INTO health.ontology_relations(relation,semantics,description,establishes_causality,definition_sha256,updated_run,patient_id) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (patient_id,relation) DO UPDATE SET
-          semantics=EXCLUDED.semantics,description=EXCLUDED.description,establishes_causality=EXCLUDED.establishes_causality,
+        conn.execute('''INSERT INTO health.ontology_relations(relation,semantics,description,establishes_causality,definition_sha256,updated_run,patient_id,status,definition) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (patient_id,relation) DO UPDATE SET
+          semantics=EXCLUDED.semantics,description=EXCLUDED.description,establishes_causality=EXCLUDED.establishes_causality,status=EXCLUDED.status,definition=EXCLUDED.definition,
           definition_sha256=EXCLUDED.definition_sha256,updated_run=EXCLUDED.updated_run WHERE health.ontology_relations.definition_sha256<>EXCLUDED.definition_sha256''',
-          (r['relation'],r['semantics'],r['description'],r['establishes_causality'],digest(r),imp.run,imp.patient))
-    imp.ontology={'categories':{c['category'] for c in categories},'relations':{r['relation'] for r in relations},'definitions':categories}
+          (r['relation'],r['semantics'],r['description'],r['establishes_causality'],digest(r),run,patient,r.get('status','active'),Jsonb(r)))
+    for t in clinical_types:
+        conn.execute('''INSERT INTO health.clinical_types(patient_id,clinical_type,label,parent,fhir_resource,concept_family,description,definition_sha256,updated_run) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+          ON CONFLICT (patient_id,clinical_type) DO UPDATE SET label=EXCLUDED.label,parent=EXCLUDED.parent,fhir_resource=EXCLUDED.fhir_resource,concept_family=EXCLUDED.concept_family,
+          description=EXCLUDED.description,definition_sha256=EXCLUDED.definition_sha256,updated_run=EXCLUDED.updated_run WHERE health.clinical_types.definition_sha256<>EXCLUDED.definition_sha256''',
+          (patient,t['clinical_type'],t['label'],t['parent'],t['fhir_resource'],t['concept_family'],t['description'],digest(t),run))
+    # These tables mirror the current registry files, whose every version the archive keeps.
+    for table,key,names in (('ontology_categories','category',[c['category'] for c in categories]),('ontology_relations','relation',[r['relation'] for r in relations]),
+                            ('clinical_types','clinical_type',[t['clinical_type'] for t in clinical_types])):
+        conn.execute(sql.SQL('DELETE FROM health.{} WHERE patient_id=%s AND {}<>ALL(%s)').format(sql.Identifier(table),sql.Identifier(key)),(patient,names))
+    imp.ontology={'categories':set(imp.registry.categories),'relations':set(imp.registry.relations),'definitions':categories}
+
+
+def project_semantics(imp):
+    """Join each projected record to its concept and clinical type, and link the type hierarchy."""
+    registry,conn,patient=imp.registry,imp.conn,imp.patient
+    unknown=sorted(set(c for c,*_ in imp.meta.values())-set(registry.categories))
+    if unknown:raise ValueError(f'Unregistered ontology entries: categories={unknown}. Register them in ontology/ first.')
+    concepts,assigned=assign_concepts(registry,imp.meta)
+    for t in registry.types.values():
+        if t['parent']:imp.relationship('type:'+t['clinical_type'],'type:'+t['parent'],'SUBTYPE_OF','ontology',{})
+    for c in registry.categories.values():
+        imp.relationship('ontology:'+c['category'],'type:'+c['clinical_type'],'DEFAULT_CLINICAL_TYPE','ontology',{})
+    members=collections.Counter(cid for cid,_,_ in assigned.values() if cid)
+    with conn.cursor() as cur:
+        cur.executemany('''INSERT INTO health.concepts(patient_id,concept_id,label,family,clinical_type,basis,codings,note,member_count,updated_run) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+          ON CONFLICT (patient_id,concept_id) DO UPDATE SET label=EXCLUDED.label,family=EXCLUDED.family,clinical_type=EXCLUDED.clinical_type,basis=EXCLUDED.basis,
+          codings=EXCLUDED.codings,note=EXCLUDED.note,member_count=EXCLUDED.member_count,updated_run=EXCLUDED.updated_run''',
+          [(patient,c['concept_id'],c['label'],c['family'],c['clinical_type'],c['basis'],Jsonb(c['codings']),c['note'],members[c['concept_id']],imp.run) for c in concepts.values()])
+        cur.executemany('''UPDATE health.resources SET clinical_type=%s,concept_id=%s,concept_basis=%s
+          WHERE resource_id=%s AND (clinical_type,concept_id,concept_basis) IS DISTINCT FROM (%s,%s,%s)''',
+          [(t,cid,basis,rid,t,cid,basis) for rid,(cid,basis,t) in assigned.items()])
+    conn.execute('DELETE FROM health.concepts WHERE patient_id=%s AND concept_id<>ALL(%s)',(patient,list(concepts)))
+    for c in concepts.values():
+        imp.relationship(c['concept_id'],'type:'+c['clinical_type'],'CONCEPT_CLINICAL_TYPE','ontology',{})
+    for rid,(cid,basis,t) in assigned.items():
+        imp.clinical_types[rid]=t
+        if cid:imp.relationship(rid,cid,'REPRESENTS_CONCEPT',basis,{})
+    imp.relationship(imp.account.user_id,patient,'OWNS_PATIENT_PROFILE','ownership',{})
+    imp.concepts=concepts
+    imp.stats['concepts']=len(concepts)
+    imp.stats['records_with_concepts']=sum(1 for cid,_,_ in assigned.values() if cid)
+
+
+def edge_endpoint(imp):
+    def endpoint(node):
+        if node in imp.categories:return ('@Resource',imp.categories[node],imp.clinical_types[node])
+        if node==imp.patient:return ('@Patient',None,None)
+        if node==imp.account.user_id:return ('@User',None,None)
+        if node in imp.doc_ids:return ('@Document',None,None)
+        for prefix,kind in (('ontology:','@OntologyCategory'),('concept:','@Concept'),('type:','@ClinicalType')):
+            if node.startswith(prefix):return (kind,None,None)
+        return None
+    return endpoint
 
 
 def enforce_ontology(imp):
@@ -659,6 +726,9 @@ def enforce_ontology(imp):
     unknown_relations=sorted(imp.relations-imp.ontology['relations'])
     if unknown_categories or unknown_relations:
         raise ValueError(f'Unregistered ontology entries: categories={unknown_categories} relations={unknown_relations}. Register them in ontology/ first.')
+    problems=imp.registry.edge_problems(imp.edges,edge_endpoint(imp))
+    if problems:
+        raise ValueError('Edges violate the registered relation rules: '+'; '.join(problems[:20]))
 
 
 def sync_embeddings(imp):
@@ -689,9 +759,14 @@ def sync_graph(imp):
         cypher(conn,'MATCH (n:Entity) WHERE n.patient_id='+canonical(patient)+' DETACH DELETE n RETURN count(*)')
     entities=[{'uid':patient,'name':account.patient_name,'kind':'Patient'}, {'uid':account.user_id,'name':account.user_name,'kind':'User'}]
     for c in imp.ontology['definitions']:
-        entities.append({'uid':'ontology:'+c['category'],'name':c['category'],'kind':'OntologyCategory','domain':c['domain'],'description':c['description']})
-    for r in conn.execute('SELECT resource_id,name,resource_type,category,evidence_kind,clinical_date,is_current FROM health.resources WHERE patient_id=%s ORDER BY resource_id',(patient,)):
-        entities.append({'uid':r['resource_id'],'name':r['name'],'kind':r['resource_type'],'category':r['category'],'evidence_kind':r['evidence_kind'],'clinical_date':str(r['clinical_date']) if r['clinical_date'] else '', 'is_current':r['is_current']})
+        entities.append({'uid':'ontology:'+c['category'],'name':c['category'],'kind':'OntologyCategory','domain':c['domain'],'subject_area':c['subject_area'],'description':c['description']})
+    for t in imp.registry.types.values():
+        entities.append({'uid':'type:'+t['clinical_type'],'name':t['label'],'kind':'ClinicalType','fhir_resource':t['fhir_resource'] or '','description':t['description']})
+    for c in imp.concepts.values():
+        entities.append({'uid':c['concept_id'],'name':c['label'],'kind':'Concept','family':c['family'] or '','basis':c['basis'],
+                         'codes':[x['system']+'|'+x['code'] for x in c['codings']]})
+    for r in conn.execute('SELECT resource_id,name,resource_type,category,clinical_type,evidence_kind,clinical_date,is_current FROM health.resources WHERE patient_id=%s ORDER BY resource_id',(patient,)):
+        entities.append({'uid':r['resource_id'],'name':r['name'],'kind':r['resource_type'],'category':r['category'],'clinical_type':r['clinical_type'] or '','evidence_kind':r['evidence_kind'],'clinical_date':str(r['clinical_date']) if r['clinical_date'] else '', 'is_current':r['is_current']})
     for d in conn.execute('SELECT document_id,title,evidence_kind,is_current FROM health.documents WHERE patient_id=%s',(patient,)):
         entities.append({'uid':d['document_id'],'name':d['title'],'kind':'Document','evidence_kind':d['evidence_kind'],'is_current':d['is_current']})
     def literal(obj):
@@ -702,13 +777,13 @@ def sync_graph(imp):
         batch=entities[start:start+100]
         query='CREATE '+','.join(f'(n{i}:Entity '+literal(r)+')' for i,r in enumerate(batch))+' RETURN count(*)'
         cypher(conn,query)
-    imp.relationship(account.user_id,patient,'OWNS_PATIENT_PROFILE','ownership',{})
     entity_ids={r['uid'] for r in entities}
-    edges=[{'a':r['from_id'],'b':r['to_id'],'relation':r['relation'],'evidence_kind':r['evidence_kind']} for r in conn.execute('SELECT * FROM health.relationships WHERE patient_id=%s',(patient,)) if r['from_id'] in entity_ids and r['to_id'] in entity_ids]
+    edges=[{'a':r['from_id'],'b':r['to_id'],'relation':r['relation'],'evidence_kind':r['evidence_kind'],'qualifiers':r['qualifiers']}
+           for r in conn.execute('SELECT * FROM health.relationships WHERE patient_id=%s AND is_current',(patient,)) if r['from_id'] in entity_ids and r['to_id'] in entity_ids]
     for start in range(0,len(edges),100):
         query=('UNWIND '+literal_list(edges[start:start+100],literal)+' AS link MATCH (a:Entity), (b:Entity) WHERE a.uid=link.a AND b.uid=link.b'
                ' AND a.patient_id='+literal(patient)+' AND b.patient_id='+literal(patient)+
-               ' CREATE (a)-[:RELATED {relation:link.relation,evidence_kind:link.evidence_kind,patient_id:'+literal(patient)+'}]->(b) RETURN count(*)')
+               ' CREATE (a)-[:RELATED {relation:link.relation,evidence_kind:link.evidence_kind,qualifiers:link.qualifiers,patient_id:'+literal(patient)+'}]->(b) RETURN count(*)')
         cypher(conn,query)
     conn.execute('REVOKE ALL ON ALL TABLES IN SCHEMA health_graph FROM health_reader')
     conn.execute('REVOKE ALL ON SCHEMA health_graph FROM health_reader')
@@ -721,7 +796,7 @@ def literal_list(items, literal):
 
 
 def migrate(conn):
-    for name in ('003_system_of_record.sql','004_multi_user.sql','005_source_history.sql'):
+    for name in ('003_system_of_record.sql','004_multi_user.sql','005_source_history.sql','006_clinical_semantics.sql'):
         conn.execute((DB/'sql'/name).read_text(),prepare=False)
 
 
@@ -800,11 +875,13 @@ def _project(conn,workspace,operation,changed):
         import_ontology(imp)
         for importer in (import_labcorp,import_quest,import_medications,import_symptoms,import_vitals,import_clinic,import_conversations,import_research):
             importer(imp); print(importer.__name__+' queued',flush=True)
+        project_semantics(imp)
         enforce_ontology(imp)
         # The workspace is the database's complete current archive, so a
         # projection absent from it was removed by an explicit database change.
         conn.execute('UPDATE health.documents SET is_current=false WHERE patient_id=%s AND document_id<>ALL(%s)',(imp.patient,list(imp.current_docs)))
         conn.execute('UPDATE health.resources SET is_current=(resource_id=ANY(%s)) WHERE patient_id=%s',(list(imp.resource_ids),imp.patient))
+        conn.execute('UPDATE health.relationships SET is_current=(last_seen_run IS NOT DISTINCT FROM %s) WHERE patient_id=%s',(run,imp.patient))
     # Pending cursors do not expose rowcounts until synchronization. Measure
     # actual committed-in-transaction insert deltas instead of pending -1s.
     after=version_counts()
