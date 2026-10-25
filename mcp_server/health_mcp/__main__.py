@@ -25,7 +25,8 @@ def serve(host, port):
     from starlette.responses import HTMLResponse
     from starlette.routing import Route
     from common import connect
-    from health_mcp.oauth import HealthOAuthProvider, _page
+    from mcp.server.auth.routes import create_protected_resource_routes
+    from health_mcp.oauth import SCOPES, HealthOAuthProvider, _page
     public_url = os.environ['HEALTH_MCP_PUBLIC_URL'].rstrip('/')
     if urlparse(public_url).scheme != 'https' and urlparse(public_url).hostname not in ('localhost', '127.0.0.1'):
         raise SystemExit('HEALTH_MCP_PUBLIC_URL must use https outside loopback testing')
@@ -52,6 +53,16 @@ def serve(host, port):
             break
     else:
         raise RuntimeError('Revocation route not found')
+    # The SDK advertises only the scopes every request needs (health.read), so clients that
+    # request what the resource metadata lists would never ask for health.write.
+    resource_routes = create_protected_resource_routes(server.settings.auth.resource_server_url, [server.settings.auth.issuer_url], scopes_supported=SCOPES,
+                                                       resource_documentation=server.settings.auth.service_documentation_url)
+    by_path = {route.path: route for route in resource_routes}
+    replaced = [i for i, route in enumerate(app.router.routes) if getattr(route, 'path', None) in by_path]
+    if len(replaced) != len(by_path):
+        raise RuntimeError('Protected resource metadata route not found')
+    for index in replaced:
+        app.router.routes[index] = by_path[app.router.routes[index].path]
     uvicorn.run(app, host=host, port=port, proxy_headers=True, forwarded_allow_ips='*', log_level='info')
 
 
