@@ -15,6 +15,7 @@ Methods:
 - exposure_series_change: how a measurement series moves while a medication is
   on versus off, across its starts, stops and restarts.
 """
+import collections
 from datetime import date, timedelta
 import hashlib
 import json
@@ -386,6 +387,11 @@ RED_FLAGS = ['chest pain or pressure', 'trouble breathing', 'fainting or nearly 
 # Active symptoms that also belong in the urgent screen, by concept or label.
 RED_FLAG_PATTERN = re.compile(r'(black|tarry|dark)[ _]stool|blood|chest[ _]pain|short(ness)?[ _]of[ _]breath|faint', re.I)
 STOOL_PATTERN = re.compile(r'stool|constipat|diarrh|bowel|rectum', re.I)
+# Symptoms of one body system are asked as one question, so one bowel movement is described once.
+SYMPTOM_GROUPS = [('bowel', re.compile(r'stool|constipat|diarrh|bowel|rectum|bloat|trapped[ _]gas|flatul', re.I)),
+                  ('urinary', re.compile(r'urin|pee|bladder', re.I))]
+# Things the patient sees rather than feels: asked as yes or no and when, never on a 0 to 10 scale.
+OBSERVED_PATTERN = re.compile(r'stool|urine|diarrh|colou?r|dark|ribbon|shape|blood|rash|lips', re.I)
 
 
 def check_in_plan(facts, associations, today, window=14, active_days=60):
@@ -439,21 +445,59 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
     for concept, item in symptoms.items():
         day, state = last_state(concept)
         label = item['label']
+        text = concept + ' ' + label
+        observed = bool(OBSERVED_PATTERN.search(text))
         symptom_items.append({
             'concept': concept, 'label': label, 'reasons': sorted(item['reasons']), 'association_count': len(item['associations']),
             'last_state': state, 'last_state_date': day.isoformat() if day else None,
+            'group': next((g for g, pattern in SYMPTOM_GROUPS if pattern.search(text)), None),
+            # A red-flag symptom is asked once, in the urgent screen.
+            'asked_in_urgent_screen': bool(RED_FLAG_PATTERN.search(text)),
+            'severity': not observed,
             'ask': f'Do you still have {label.lower()}?',
-            'if_yes': 'Ask when (last night, this morning, all day), severity 0 to 10, and better, same or worse than last time.'
-                      + (' Ask the Bristol stool type (1 to 7).' if STOOL_PATTERN.search(concept + ' ' + label) else ''),
+            'if_yes': 'Ask when it last happened (last night, this morning, all day).' if observed else
+                      'Ask when (last night, this morning, all day), severity 0 to 10, and better, same or worse than last time.',
             'if_no': 'Ask when it stopped, and record it as absent from that day.' if state == 'present'
-                     else 'Record it as absent today.',
-            'bristol': bool(STOOL_PATTERN.search(concept + ' ' + label))})
+                     else 'Record it as absent today.'})
     symptom_items.sort(key=lambda i: i['label'])
     symptom_items.sort(key=lambda i: i['last_state_date'] or '', reverse=True)
     symptom_items.sort(key=lambda i: i['association_count'], reverse=True)
+    for i in symptom_items:
+        if i['asked_in_urgent_screen']:
+            i['group'] = None
+    sizes = collections.Counter(i['group'] for i in symptom_items if i['group'])
+    for i in symptom_items:
+        if sizes[i['group']] < 2:
+            i['group'] = None
+    groups = []
+    for key, _ in SYMPTOM_GROUPS:
+        members = [i for i in symptom_items if i['group'] == key]
+        if not members:
+            continue
+        names = ', '.join(i['label'].lower() for i in members)
+        bristol = any(STOOL_PATTERN.search(i['concept'] + ' ' + i['label']) for i in members)
+        ask = (f'How have your bowel movements been since {since_text}? How many, and which Bristol type (1 to 7)? Any of these: {names}?'
+               if key == 'bowel' else f'Any of these since {since_text}: {names}?')
+        felt = [i['label'].lower() for i in members if i['severity']]
+        stopped = [i['label'].lower() for i in members if i['last_state'] == 'present']
+        groups.append({'key': key, 'ask': ask, 'items': [i['concept'] for i in members], 'bristol': bristol,
+                       'follow_up': ' '.join(filter(None, [
+                           f"For any of {', '.join(felt)} they have: severity 0 to 10, and better, same or worse." if felt else '',
+                           f"For any of {', '.join(stopped)} that is gone: when it stopped." if stopped else '',
+                           'Record each listed item as present or absent; ask only what the answer left open.']))})
 
-    urgent = list(RED_FLAGS) + [f"{i['label']} (you reported it {i['last_state_date']})" for i in symptom_items
-                                if RED_FLAG_PATTERN.search(i['concept'] + ' ' + i['label'])]
+    # A reported red-flag symptom is folded into the standard item it overlaps, not asked beside it.
+    urgent = list(RED_FLAGS)
+    for i in symptom_items:
+        if not i['asked_in_urgent_screen']:
+            continue
+        note = f"you reported {i['label'].lower()} on {i['last_state_date']}; if it has stopped, when?"
+        words = set(re.findall(r'stool|blood|chest|breath|faint', i['concept'] + ' ' + i['label'], re.I))
+        n = next((n for n, flag in enumerate(urgent) if words & set(re.findall(r'stool|blood|chest|breath|faint', flag))), None)
+        if n is None:
+            urgent.append(f"{i['label']} ({note})")
+        else:
+            urgent[n] += f' ({note})'
     order = ['concept:body_weight', 'concept:systolic_blood_pressure', 'concept:diastolic_blood_pressure', 'concept:heart_rate']
     measured = sorted(facts.get('reported_measurements', {}).items(), key=lambda m: (order.index(m[0]) if m[0] in order else len(order), m[1]['label']))
     measurements = [{'concept': c, 'label': m['label'], 'unit': m['unit'], 'last_reported': m['last'].isoformat()}
@@ -482,7 +526,7 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
          'on_yes': 'Stop the check-in. Advise urgent care or emergency services as appropriate, and record what was reported.'},
         {'key': 'open', 'ask': f'Anything new or different since {since_text}, good or bad?',
          'record_as': 'whatever fits: symptom_observation, reported_exposure, patient_context'},
-        {'key': 'measurements', 'ask': 'What were your ' + ', '.join(m['label'].lower() for m in measurements) + ' this morning?',
+        {'key': 'measurements', 'ask': 'What were your ' + measurement_names(measurements) + ' this morning?',
          'items': measurements, 'record_as': 'anthropometric_measurement, vital_sign_measurement (blood pressure components paired)'} if measurements else None,
         {'key': 'sleep', 'ask': 'How did you sleep last night? When did you go to bed and get up, and did you wake up during the night?',
          'record_as': 'sleep_observation dated today'},
@@ -492,15 +536,51 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
                                         f'Have you taken any as-needed medications since {since_text}?'],
          'record_as': 'record_medication: medication_change for changes, medication_administration for as-needed doses'},
         {'key': 'exposures', 'items': exposure_items} if exposure_items else None,
-        {'key': 'symptoms', 'items': symptom_items, 'scales': {'severity': '0 to 10, 0 none and 10 worst imaginable', 'stool': 'Bristol type 1 to 7'},
-         'record_as': 'symptom_observation per symptom with occurrence date, numeric_severity and, for stool, stool_form'} if symptom_items else None,
+        {'key': 'symptoms', 'groups': groups, 'items': symptom_items,
+         'scales': {'severity': '0 to 10, 0 none and 10 worst imaginable', 'stool': 'Bristol type 1 to 7'},
+         'record_as': 'symptom_observation per symptom with occurrence date, numeric_severity for felt symptoms and, for stool, stool_form'} if symptom_items else None,
         {'key': 'missed_days', 'days': missed,
          'ask': 'I have no check-in for ' + ', '.join(missed) + '. Do you want to fill any of those in? It is fine if you do not remember.',
          'on_yes': 'Ask only about the days and items they can recall; note in source_context that the answers are recalled.'} if missed else None,
         {'key': 'close', 'say': 'Read back everything you will record, confirm it, record it, then call associations and share what changed in a line or two, plus any safety note.'},
     ]
-    return {'date': today.isoformat(), 'covers_since': since.isoformat() if since else None,
-            'steps': [dict(step=n, **s) for n, s in enumerate([s for s in steps if s], 1)]}
+    steps = [dict(step=n, **s) for n, s in enumerate([s for s in steps if s], 1)]
+    return {'date': today.isoformat(), 'covers_since': since.isoformat() if since else None, 'steps': steps,
+            'questionnaire': questionnaire(steps)}
+
+
+def measurement_names(measurements):
+    """Plain names for the measurements to ask, with blood pressure asked as one reading."""
+    plain = {'concept:body_weight': 'weight', 'concept:heart_rate': 'pulse'}
+    names = []
+    for m in measurements:
+        name = 'blood pressure' if m['concept'] in ('concept:systolic_blood_pressure', 'concept:diastolic_blood_pressure') \
+            else plain.get(m['concept'], m['label'].lower())
+        if name not in names:
+            names.append(name)
+    return ', '.join(names[:-1]) + ' and ' + names[-1] if len(names) > 1 else names[0]
+
+
+def questionnaire(steps):
+    """Every question of the agenda as one numbered list, for answering all at once."""
+    questions = []
+    for s in steps:
+        if s['key'] == 'urgent':
+            questions.append(s['ask'] + ' ' + '; '.join(s['items']) + '. If yes to any, say which and stop there.')
+        elif s['key'] in ('open', 'measurements', 'sleep', 'workout', 'missed_days'):
+            questions.append(s['ask'])
+        elif s['key'] == 'medications':
+            questions += s['asks']
+        elif s['key'] == 'exposures':
+            questions += [i['ask'] for i in s['items']]
+        elif s['key'] == 'symptoms':
+            questions += [g['ask'] for g in s['groups']]
+            for i in s['items']:
+                if i['group'] or i['asked_in_urgent_screen']:
+                    continue
+                yes = 'when' if not i['severity'] else 'when, severity 0 to 10, and better, same or worse'
+                questions.append(f"{i['ask']} If yes: {yes}." + (' If not: when did it stop?' if i['last_state'] == 'present' else ''))
+    return [f'{n}. {q}' for n, q in enumerate(questions, 1)]
 
 
 def pooled_patterns(rows, minimum):

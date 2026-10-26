@@ -55,7 +55,7 @@ Scopes: `health.read` for queries, `health.write` for `record_narrative`, `recor
 | --- | --- |
 | `health-archive-grounding` | Query the archive before answering, and keep evidence kinds distinct |
 | `health-connections` | Relay evidence-graded connections and compare explanations |
-| `health-daily-check-in` | Run the morning check-in like a triage nurse and record every answer, including "no" |
+| `health-daily-check-in` | Run the morning check-in like a triage nurse, one question at a time or all at once as a numbered list, without repeating overlapping questions, and record every answer, including "no" |
 | `health-conversation-audit` | Capture each turn and preserve corrections and clarifications |
 | `health-record-narrative` | Record symptoms, vitals, weights, exposures and hypotheses as quote-backed records |
 | `health-record-medication` | Record regimens, changes, holds and single doses |
