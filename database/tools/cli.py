@@ -196,7 +196,7 @@ def execute(conn,args):
     elif args.command=='profile':
         result=conn.execute("SELECT resource_id,name,recorded_at,assertion,evidence_kind,normalized,provenance FROM health.resources WHERE is_current AND category='patient_demographics' ORDER BY recorded_at DESC NULLS LAST,name").fetchall()
     elif args.command=='activity':
-        result=conn.execute("SELECT resource_id,name,category,clinical_date,clinical_date_role,recorded_at,assertion,evidence_kind,normalized,provenance FROM health.resources WHERE is_current AND category IN ('exercise_routine','exercise_session') ORDER BY recorded_at DESC NULLS LAST,name").fetchall()
+        result=conn.execute("SELECT resource_id,name,category,clinical_date,clinical_date_role,recorded_at,assertion,evidence_kind,normalized,provenance FROM health.resources WHERE is_current AND category IN ('exercise_routine','exercise_session','sleep_observation') ORDER BY recorded_at DESC NULLS LAST,name").fetchall()
     elif args.command=='symptoms':
         result=conn.execute("SELECT resource_id,name,category,clinical_date,clinical_date_role,recorded_at,assertion,value_text,normalized,provenance FROM health.resources WHERE is_current AND category IN ('symptom_observation','recurring_pattern','exposure_report','reported_exposure','reported_association','patient_hypothesis','medication_response','patient_context','care_preference') ORDER BY recorded_at DESC NULLS LAST,name").fetchall()
     return result

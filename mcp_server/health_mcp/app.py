@@ -170,7 +170,7 @@ def build(auth_provider=None, issuer_url=None):
 
     @server.tool(annotations=READ)
     async def activity() -> dict:
-        """Exercise routines and completed exercise sessions."""
+        """Exercise routines, completed exercise sessions and nightly sleep reports. `concept` with `sleep` gives hours slept as a series."""
         return await _query('activity')
 
     @server.tool(annotations=READ)

@@ -37,7 +37,7 @@ for r in rows:
  for v in d.get('medication_ids',[]):assert v in meds
  if d.get('medication_id'):assert d['medication_id'] in meds
  for v in d.get('related_administration_ids',[]):assert v in administrations
-exports=['records.jsonl','observations.jsonl','patterns.jsonl','exposures.jsonl','associations.jsonl','hypotheses.jsonl','medication-responses.jsonl','care-preferences.jsonl','exercise-routines.jsonl','anthropometrics.jsonl','body-composition.jsonl','demographics.jsonl','measurement-contexts.jsonl','vital-signs.jsonl','current-state.json','inventory.json']
+exports=['records.jsonl','observations.jsonl','patterns.jsonl','exposures.jsonl','associations.jsonl','hypotheses.jsonl','medication-responses.jsonl','care-preferences.jsonl','exercise-routines.jsonl','anthropometrics.jsonl','body-composition.jsonl','demographics.jsonl','measurement-contexts.jsonl','vital-signs.jsonl','sleep.jsonl','current-state.json','inventory.json']
 exports=[p for p in exports if (s/p).exists()]
 hashes={p:hashlib.sha256((s/p).read_bytes()).hexdigest() for p in exports}
 result=json.loads(subprocess.check_output([sys.executable,str(code/'symptoms/tools/ingest-narrative.py'),str(repeat[0]),str(repeat[1]),'--root',str(s)]))

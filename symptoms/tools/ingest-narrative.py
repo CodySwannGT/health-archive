@@ -102,6 +102,12 @@ def main():
             for paired in record['details']['paired_component_record_ids']:
                 if paired not in record_ids.values() or paired == record['record_id']:
                     raise ValueError('Blood pressure component pair must reference another record in this report')
+        if record['record_type'] == 'sleep_observation':
+            d = record['details']
+            if (d['value'] is None) != (d['unit'] is None) or (d['value'] is None) != (d['value_basis'] is None):
+                raise ValueError('Sleep duration, unit and value basis are reported together or not at all')
+            if d['value'] is None and d['quality'] is None and d['awakenings'] is None and not d['quality_source']:
+                raise ValueError('A sleep record needs a duration, quality or awakenings')
         if record['record_type'] == 'exercise_routine':
             for group in record['details']['schedule']:
                 for activity in group['activities']:
@@ -149,7 +155,7 @@ def main():
     for filename, kind in [("observations.jsonl", "symptom_observation"), ("patterns.jsonl", "recurring_pattern"),
                            ("exposures.jsonl", "reported_exposure"), ("associations.jsonl", "reported_association"),
                            ("hypotheses.jsonl", "patient_hypothesis"), ("medication-responses.jsonl", "medication_response"),
-                           ("care-preferences.jsonl", "care_preference"), ("exercise-routines.jsonl", "exercise_routine"), ("anthropometrics.jsonl", "anthropometric_measurement"), ("body-composition.jsonl", "body_composition_measurement"), ("demographics.jsonl", "patient_demographics"), ("measurement-contexts.jsonl", "measurement_context"), ("vital-signs.jsonl", "vital_sign_measurement")]:
+                           ("care-preferences.jsonl", "care_preference"), ("exercise-routines.jsonl", "exercise_routine"), ("anthropometrics.jsonl", "anthropometric_measurement"), ("body-composition.jsonl", "body_composition_measurement"), ("demographics.jsonl", "patient_demographics"), ("measurement-contexts.jsonl", "measurement_context"), ("vital-signs.jsonl", "vital_sign_measurement"), ("sleep.jsonl", "sleep_observation")]:
         save(ROOT / filename, "".join(canonical(r) + "\n" for r in all_records if r["record_type"] == kind))
     inventory = json.loads((ROOT / "inventory.json").read_text()) if (ROOT / "inventory.json").exists() else {"schema_version": "1.0", "patient_scope": scope, "reports": []}
     if not any(r["report_id"] == report_id for r in inventory["reports"]):
