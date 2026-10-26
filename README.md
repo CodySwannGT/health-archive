@@ -18,7 +18,7 @@ This repository holds the code only. It never contains anyone's health data.
 
 | Part | Where |
 | --- | --- |
-| Plugin with seven skills and an MCP connector, for Claude, ChatGPT and Codex | [plugins/health-archive](plugins/health-archive/README.md) |
+| Plugin with eight skills and an MCP connector, for Claude, ChatGPT and Codex | [plugins/health-archive](plugins/health-archive/README.md) |
 | MCP server with OAuth 2.1, invitations and accounts | [mcp_server](mcp_server/README.md) |
 | Database, write path, ontology and query tools | [database](database/README.md) |
 | Template archive every new patient starts from | [template](template/) |

@@ -53,7 +53,7 @@ result, found = c.call('associations', {'min_strength': 'insufficient', 'limit':
 check('associations are listed with strength and statement', not result.get('isError') and 'results' in found
       and all(a['strength'] in ('insufficient', 'weak', 'moderate', 'strong') and 'not proof of cause' in a['statement'] for a in found['results']))
 result, plan = c.call('check_in', {'days': 7})
-check('check-in plan is returned', not result.get('isError') and 'items' in plan)
+check('check-in agenda is returned in order', not result.get('isError') and [s['key'] for s in plan['steps']][:3] == ['opening', 'urgent', 'open'])
 result, pool = c.call('pooling', {})
 check('pooling status shows consent text and the five-person floor', not result.get('isError') and pool['minimum_contributors'] >= 5 and pool['consent_text'])
 result, _ = c.call('pooled_patterns', {'limit': 5})

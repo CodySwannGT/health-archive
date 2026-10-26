@@ -108,6 +108,14 @@ def main():
                 raise ValueError('Sleep duration, unit and value basis are reported together or not at all')
             if d['value'] is None and d['quality'] is None and d['awakenings'] is None and not d['quality_source']:
                 raise ValueError('A sleep record needs a duration, quality or awakenings')
+        if record['record_type'] == 'exercise_session':
+            d = record['details']
+            if d['status'] == 'none_reported' and (d['modality'] is not None or d['duration'] is not None):
+                raise ValueError('A no-workout report has no modality or duration')
+            if d['status'] == 'completed_reported' and d['modality'] is None:
+                raise ValueError('A completed workout needs its modality')
+        if record['record_type'] == 'symptom_observation' and record['details'].get('stool_form') and record['details']['assertion'] != 'present':
+            raise ValueError('A stool form describes a symptom that is present')
         if record['record_type'] == 'exercise_routine':
             for group in record['details']['schedule']:
                 for activity in group['activities']:

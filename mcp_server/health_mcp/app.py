@@ -32,7 +32,7 @@ Record new patient statements with record_narrative or record_medication only af
 then read the facts back before saying they were saved. Capture user-facing conversation turns with capture_conversation.
 Drawing connections is the purpose: use associations for evidence-graded patterns in the person's own records, with
 competing explanations and pooled context, and say how strong each is. An association is never a cause or a diagnosis.
-Use check_in to ask about symptom-free and alcohol-free days too, because comparisons need explicit negatives.'''
+Run the morning check-in with check_in; it asks about symptom-free and alcohol-free days too, because comparisons need explicit negatives.'''
 
 READ = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -240,9 +240,10 @@ def build(auth_provider=None, issuer_url=None):
 
     @server.tool(annotations=READ)
     async def check_in(date: str | None = None, days: int = 14) -> dict:
-        """What to ask in a daily check-in: the symptoms and exposures in this person's open associations, and the
-        recent days with no report. Ask about each, record "none" as an explicit absence with record_narrative, and
-        never treat an unreported day as symptom-free."""
+        """The morning check-in agenda, in order and tailored to this person's records: urgent screen, open question,
+        tracked measurements, sleep, yesterday's workout, medication changes and as-needed doses, exposures, each
+        symptom with what it was last time, and an offer to fill in missed days. Follow the health-daily-check-in skill,
+        record every answer including "no", and never treat an unreported day as symptom-free."""
         return await _query('check-in', date=date, days=min(max(days, 1), 60))
 
     @server.tool(annotations=READ)
