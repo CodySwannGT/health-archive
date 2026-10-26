@@ -155,6 +155,34 @@ class CheckInTest(unittest.TestCase):
         self.assertEqual(items['concept:exposure:alcohol']['reported_days'], 3)
         self.assertIn('Record "none" too', items['concept:symptom:swelling']['ask'])
 
+    def test_active_symptoms_without_dated_reports_are_asked_about(self):
+        facts = swelling_facts()
+        facts['reports'] = [
+            {'concept': 'concept:symptom:constipation', 'label': 'Constipation', 'kind': 'symptom', 'reported': D(1), 'assertion': 'present'},
+            {'concept': 'concept:symptom:bloating_trapped_gas', 'label': 'Bloating or trapped gas', 'kind': 'symptom', 'reported': D(1), 'assertion': 'present'},
+            # Reported gone since, so no longer active.
+            {'concept': 'concept:key:symptom:night_sweats', 'label': 'night sweats', 'kind': 'symptom', 'reported': D(5), 'assertion': 'present'},
+            {'concept': 'concept:key:symptom:night_sweats', 'label': 'night sweats', 'kind': 'symptom', 'reported': D(9), 'assertion': 'absent'},
+            # Too long ago to be active.
+            {'concept': 'concept:key:symptom:dry_eyes', 'label': 'dry eyes', 'kind': 'symptom', 'reported': date(2026, 6, 1), 'assertion': 'present'},
+            # A one-off episode is not an ongoing symptom.
+            {'concept': 'concept:key:symptom:post_cardio_sweating', 'label': 'post cardio sweating', 'kind': 'symptom', 'reported': D(20),
+             'assertion': 'present', 'scope': 'current_state', 'dated': True},
+            {'concept': 'concept:key:symptom:sock_marks', 'label': 'sock marks', 'kind': 'symptom', 'reported': D(20),
+             'assertion': 'present', 'scope': 'lifelong_history'},
+        ]
+        plan = check_in_plan(facts, find_associations(facts), D(24), window=5)
+        labels = [p['label'] for p in plan]
+        self.assertEqual(labels[:2], ['Swelling', 'Alcohol intake'])
+        self.assertIn('Constipation', labels)
+        self.assertIn('Bloating or trapped gas', labels)
+        self.assertNotIn('night sweats', labels)
+        self.assertNotIn('dry eyes', labels)
+        self.assertNotIn('post cardio sweating', labels)
+        self.assertNotIn('sock marks', labels)
+        constipation = next(p for p in plan if p['label'] == 'Constipation')
+        self.assertEqual((constipation['reasons'], constipation['reported_days']), (['active_symptom'], 0))
+
     def test_fisher(self):
         self.assertAlmostEqual(fisher_greater(5, 0, 0, 3), 1 / 56)
         self.assertEqual(fisher_greater(0, 3, 3, 0), 1.0)

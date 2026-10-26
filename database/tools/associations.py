@@ -371,28 +371,52 @@ def find_associations(facts):
     return results
 
 
-def check_in_plan(facts, associations, today, window=14):
-    """What a daily check-in should ask about: symptoms and exposures in open associations, and the recent days with no report."""
+def check_in_plan(facts, associations, today, window=14, active_days=60):
+    """What a daily check-in should ask about, and the recent days with no report for each.
+
+    Two reasons put a concept on the list: it is in an open association, or it
+    is an active symptom: described as ongoing (current, recurring or a
+    treatment response) without being tied to one day, within `active_days`,
+    and not reported absent since. A report about one day, such as sweating
+    after one workout, and a lifelong trait are not active. Active symptoms are often the ones with no dated
+    reports at all, so no association can exist yet; asking is how one can."""
     days = [today - timedelta(days=i) for i in range(window)]
     recorded = daily(facts['observations'])
-    kinds = {o['concept']: o['kind'] for o in facts['observations']}
     items = {}
     for a in associations:
         if a['strength'] == 'strong' and a['method'] != 'exposure_episode_contrast':
             continue
         for concept, label in ((a['outcome_concept'], a['outcome_label']), (a['exposure_concept'], a['exposure_label'])):
             if concept in recorded:
-                item = items.setdefault(concept, {'concept': concept, 'label': label, 'associations': set()})
+                item = items.setdefault(concept, {'label': label, 'associations': set(), 'reasons': set()})
                 item['associations'].add(a['association_id'])
+                item['reasons'].add('association')
+    kinds = {r['concept']: r['kind'] for r in facts.get('reports', [])}
+    kinds.update({o['concept']: o['kind'] for o in facts['observations']})
+    latest = {}
+    for r in sorted(facts.get('reports', []), key=lambda r: (r['reported'], r['assertion'] == 'present')):
+        if r['kind'] == 'symptom' and r['assertion'] in ('present', 'absent'):
+            latest[r['concept']] = r
+    for concept, r in latest.items():
+        ongoing = not r.get('dated') and r.get('scope') in (None, 'current_state', 'recurring_pattern', 'treatment_response')
+        if r['assertion'] == 'present' and ongoing and (today - r['reported']).days <= active_days:
+            item = items.setdefault(concept, {'label': r['label'], 'associations': set(), 'reasons': set()})
+            item['reasons'].add('active_symptom')
+            item['last_reported_present'] = r['reported'].isoformat()
     plan = []
     for concept, item in sorted(items.items()):
-        missing = [d.isoformat() for d in days if d not in recorded[concept]]
-        plan.append({'concept': concept, 'label': item['label'], 'unreported_days': missing,
-                     'reported_days': window - len(missing), 'association_count': len(item['associations']),
-                     'kind': kinds[concept],
-                     'ask': (f"Any {item['label'].lower()} today, and how much?" if kinds[concept] == 'exposure'
+        missing = [d.isoformat() for d in days if d not in recorded.get(concept, {})]
+        kind = kinds[concept]
+        plan.append({'concept': concept, 'label': item['label'], 'kind': kind, 'reasons': sorted(item['reasons']),
+                     'last_reported_present': item.get('last_reported_present'),
+                     'unreported_days': missing, 'reported_days': window - len(missing), 'association_count': len(item['associations']),
+                     'ask': (f"Any {item['label'].lower()} today, and how much?" if kind == 'exposure'
                              else f"Did you have any {item['label'].lower()} today?") + ' Record "none" too, as an explicit absence.'})
-    return sorted(plan, key=lambda p: (-p['association_count'], -len(p['unreported_days']), p['label']))
+    # Concepts in associations first, then active symptoms reported most recently.
+    plan.sort(key=lambda p: p['label'])
+    plan.sort(key=lambda p: p['last_reported_present'] or '', reverse=True)
+    plan.sort(key=lambda p: p['association_count'], reverse=True)
+    return plan
 
 
 def pooled_patterns(rows, minimum):
@@ -444,7 +468,7 @@ def as_date(value):
 def load_facts(conn, patient, resource_ids):
     """The dated observations, medication timelines and measurement series of the given current records."""
     rows = conn.execute("""SELECT x.resource_id, x.category, x.name, x.clinical_date, x.assertion, x.numeric_value,
-          coalesce(x.unit_ucum, x.unit_source) AS unit, x.concept_id, x.normalized->'source_details' AS details,
+          coalesce(x.unit_ucum, x.unit_source) AS unit, x.concept_id, x.normalized->'source_details' AS details, x.recorded_at,
           c.label AS concept_label, c.basis, c.family, c.generic_name, c.brand_names
         FROM health.resources x LEFT JOIN health.concepts c ON c.patient_id = x.patient_id AND c.concept_id = x.concept_id
         WHERE x.patient_id = %s AND x.resource_id = ANY(%s) ORDER BY x.resource_id""", (patient, list(resource_ids))).fetchall()
@@ -457,14 +481,24 @@ def load_facts(conn, patient, resource_ids):
 
     concepts = {r['concept_id']: (r['basis'], r['family'], label(r), r['generic_name'], tuple(r['brand_names'] or ()))
                 for r in rows if r['concept_id']}
-    observations = []
+    observations, reports = [], []
     for r in rows:
-        if (r['category'] in ('symptom_observation', 'reported_exposure') and r['clinical_date'] and r['concept_id']
-                and r['assertion'] in ('present', 'absent')):
-            amount = ((r['details'] or {}).get('details') or {}).get('amount') or {}
+        if r['category'] not in ('symptom_observation', 'reported_exposure') or not r['concept_id']:
+            continue
+        source = r['details'] or {}
+        details = source.get('details') or {}
+        reported = as_date(source.get('reported_local_date') or r['recorded_at'])
+        kind = 'symptom' if r['category'] == 'symptom_observation' else 'exposure'
+        if reported:
+            reports.append({'concept': r['concept_id'], 'label': label(r), 'kind': kind, 'reported': reported, 'assertion': r['assertion'],
+                            'scope': details.get('temporal_scope'), 'dated': bool(r['clinical_date'])})
+        # A statement about the present ("constipation persists") describes the day it was made.
+        day = r['clinical_date'] or (reported if details.get('temporal_scope') == 'current_state' else None)
+        if day and r['assertion'] in ('present', 'absent'):
+            amount = details.get('amount') or {}
             observations.append({'rid': r['resource_id'], 'concept': r['concept_id'], 'label': label(r), 'family': r['family'],
-                                 'kind': 'symptom' if r['category'] == 'symptom_observation' else 'exposure',
-                                 'date': r['clinical_date'], 'assertion': r['assertion'],
+                                 'kind': kind, 'date': day, 'assertion': r['assertion'],
+                                 'date_basis': 'occurrence' if r['clinical_date'] else 'current_state_on_report_date',
                                  'amount': amount.get('value') if isinstance(amount.get('value'), (int, float)) else None})
     medications = {}
     for r in rows:
@@ -489,4 +523,4 @@ def load_facts(conn, patient, resource_ids):
     for s in series.values():
         # One unit per series, the most common; mixed units are never converted here.
         s['unit'], s['points'] = max(s['points'].items(), key=lambda item: (len(item[1]), str(item[0])))
-    return {'observations': observations, 'medications': list(medications.values()), 'series': series, 'concepts': concepts}
+    return {'observations': observations, 'reports': reports, 'medications': list(medications.values()), 'series': series, 'concepts': concepts}
