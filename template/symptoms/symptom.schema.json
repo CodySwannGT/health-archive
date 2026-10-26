@@ -3194,6 +3194,235 @@
         "details"
       ],
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "sleep_observation"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "description": "Patient-reported sleep for one night, dated by the morning it ended (occurrence). Duration is in hours, as stated or computed from stated bed and wake times. Quality stays in the patient's words. Unreported elements are null, never estimated.",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0,
+              "maximum": 24
+            },
+            "unit": {
+              "enum": [
+                "h",
+                null
+              ]
+            },
+            "value_basis": {
+              "enum": [
+                "explicit_patient_value",
+                "approximate_patient_value",
+                "computed_from_reported_times",
+                null
+              ]
+            },
+            "source_text": {
+              "type": "string"
+            },
+            "bedtime_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "wake_time_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "awakenings": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "quality": {
+              "enum": [
+                "very_poor",
+                "poor",
+                "fair",
+                "good",
+                "very_good",
+                null
+              ]
+            },
+            "quality_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "naps_source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "occurrence": {
+              "$ref": "#/$defs/occurrence"
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "value",
+            "unit",
+            "value_basis",
+            "source_text",
+            "bedtime_source",
+            "wake_time_source",
+            "awakenings",
+            "quality",
+            "quality_source",
+            "naps_source",
+            "occurrence",
+            "notes",
+            "unknowns"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
     }
   ],
   "$defs": {

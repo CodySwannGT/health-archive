@@ -19,7 +19,7 @@ UCUM = {'mg/dL':'mg/dL','g/dL':'g/dL','ng/dL':'ng/dL','ng/mL':'ng/mL','pg/mL':'p
         'U/L':'U/L','mcg/dL':'ug/dL','ug/dL':'ug/dL','%':'%','mmHg':'mm[Hg]',
         'beats/min':'/min','degF':'[degF]','mL/min/1.73':'mL/min/{1.73_m2}',
         'mL/min/1.73m2':'mL/min/{1.73_m2}','mL/min/1.73 m2':'mL/min/{1.73_m2}',
-        'Thousand/uL':'10*3/uL','Million/uL':'10*6/uL','nmol/L':'nmol/L','lb':'[lb_av]','in':'[in_i]'}
+        'Thousand/uL':'10*3/uL','Million/uL':'10*6/uL','nmol/L':'nmol/L','lb':'[lb_av]','in':'[in_i]','h':'h'}
 SYSTEMS = {'2.16.840.1.113883.6.1':'http://loinc.org',
            '2.16.840.1.113883.6.88':'http://www.nlm.nih.gov/research/umls/rxnorm',
            '2.16.840.1.113883.6.96':'http://snomed.info/sct'}
@@ -455,7 +455,8 @@ def import_symptoms(imp):
         assertion=d.get('assertion') or ('hypothesis' if kind=='patient_hypothesis' else 'reported')
         quotes='\n'.join(x['quote'] for x in r['provenance']['evidence'])
         occurrence=d.get('occurrence',{}).get('date')
-        measurement = kind in ('anthropometric_measurement','vital_sign_measurement')
+        # Sleep is a nightly measurement in hours; a report with only quality has no value.
+        measurement = kind in ('anthropometric_measurement','vital_sign_measurement','sleep_observation')
         composition = kind == 'body_composition_measurement'
         imp.resource(rid,label,'Observation' if kind=='symptom_observation' or measurement or composition else 'Basic',kind,clinical=occurrence,recorded=r['reported_at'],
                      date_role='patient_reported_occurrence_date' if occurrence else 'onset_or_occurrence_unspecified',assertion=assertion,evidence='patient_hypothesis' if kind=='patient_hypothesis' else 'patient_report',

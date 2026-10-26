@@ -16,6 +16,7 @@ Each patient statement becomes reviewed records tied to verbatim quotes from the
    - `vital_sign_measurement`: systolic, diastolic and pulse as separate records. Link the two blood pressure components with `paired_component_record_ids`.
    - `anthropometric_measurement`: weight in lb or height in in. Use `value_basis: patient_clarified_value` with `original_written_value` when a typo is confirmed.
    - `reported_exposure`: for example alcohol, with a drink-count `amount` and `time_of_day`.
+   - `sleep_observation`: one night, with `occurrence` on the morning it ended. Hours slept as `value` in `h` (`computed_from_reported_times` when derived from stated bed and wake times), plus `awakenings`, `quality` and naps as stated; leave the rest null.
    - `reported_association`: `causality: not_established`.
    - `patient_hypothesis`: the patient's own explanation. Never a finding.
    - `measurement_context`, `exercise_session`, `care_preference`, `patient_context`.

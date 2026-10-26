@@ -75,6 +75,14 @@
       "description": "An exercise routine or a single exercise session."
     },
     {
+      "clinical_type": "sleep",
+      "label": "Sleep",
+      "parent": "observation",
+      "fhir_resource": "Observation",
+      "concept_family": "measurement",
+      "description": "Patient-reported sleep for one night: duration, bed and wake times, awakenings, naps and quality."
+    },
+    {
       "clinical_type": "social_history_observation",
       "label": "Social history",
       "parent": "observation",

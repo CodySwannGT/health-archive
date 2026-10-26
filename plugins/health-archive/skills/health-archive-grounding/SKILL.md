@@ -20,7 +20,7 @@ Use the `health-archive` MCP tools. In a local checkout, the `healthdb` command 
 | What might be driving a symptom or a trend | `associations`; see the health-connections skill |
 | Vital signs from every source | `vitals` |
 | Weight, height, BMI, body composition from every source | `anthropometrics` (`history` adds superseded values) |
-| Exercise | `activity` |
+| Exercise and sleep | `activity`; hours slept over time: `concept` with `sleep` |
 | Demographics | `profile` |
 | Dates and sequences | `timeline` with `name`, `from_date`, `to_date` |
 | Free-text evidence | `search_archive`, or `search` then `fetch` |

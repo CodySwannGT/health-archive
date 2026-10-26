@@ -259,6 +259,21 @@
       "note": "Donor screening cholesterol. Kept separate from laboratory cholesterol results because the specimen and method differ."
     },
     {
+      "concept": "sleep",
+      "label": "Sleep",
+      "clinical_type": "sleep",
+      "codings": [],
+      "match": {
+        "name_patterns": [
+          "."
+        ],
+        "categories": [
+          "sleep_observation"
+        ]
+      },
+      "note": "Every sleep report. Its numeric value is hours slept, so the concept forms a nightly series."
+    },
+    {
       "concept": "symptom:swelling",
       "label": "Swelling (edema)",
       "clinical_type": "symptom",

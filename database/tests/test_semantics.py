@@ -131,6 +131,15 @@ class ConceptTest(unittest.TestCase):
             Registry(load('categories.json', 'categories'), load('relations.json', 'relations'),
                      load('clinical-types.json', 'clinical_types'), [{**curated, 'brands': ['Linzess']}])
 
+    def test_sleep_reports_form_one_measurement_concept(self):
+        concepts, assigned = assign_concepts(self.registry, {
+            'night1': ('sleep_observation', 'Slept about 6 hours', None, None, 'reported', None),
+            'night2': ('sleep_observation', 'Bed at 11, up at 5:30', None, None, 'reported', None),
+        })
+        self.assertEqual(assigned['night1'][:2], ('concept:sleep', 'curated_name_match'))
+        self.assertEqual(assigned['night2'][0], 'concept:sleep')
+        self.assertEqual((assigned['night1'][2], concepts['concept:sleep']['family']), ('sleep', 'measurement'))
+
 
 class EdgeRuleTest(unittest.TestCase):
     def setUp(self):

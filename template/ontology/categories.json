@@ -310,6 +310,14 @@
       "description": "Clinical record (C-CDA): result reports."
     },
     {
+      "category": "sleep_observation",
+      "domain": "patient_reports",
+      "subject_area": "lifestyle",
+      "clinical_type": "sleep",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "Patient-reported sleep for one night, dated by the morning it ended: hours slept, bed and wake times, awakenings, naps and quality as stated."
+    },
+    {
       "category": "social_history",
       "domain": "cleveland_clinic",
       "subject_area": "lifestyle",
