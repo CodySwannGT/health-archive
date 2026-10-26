@@ -16,7 +16,8 @@ Use the `health-archive` MCP tools. In a local checkout, the `healthdb` command 
 | Lab values, ranges, flags | `labs` with `name` (matches the result name or its concept) |
 | One test or measurement over time, across every source | `concepts` to find it, then `concept` (for example `body_weight`, `systolic_blood_pressure`) |
 | Current regimen, changes, single doses | `medications` with `changes`, `all_sources` |
-| Symptoms, exposures, associations, hypotheses, preferences | `symptoms` |
+| Symptoms, exposures, reported associations, hypotheses, preferences | `symptoms` |
+| What might be driving a symptom or a trend | `associations`; see the health-connections skill |
 | Vital signs from every source | `vitals` |
 | Weight, height, BMI, body composition from every source | `anthropometrics` (`history` adds superseded values) |
 | Exercise | `activity` |
@@ -33,7 +34,7 @@ Use the `health-archive` MCP tools. In a local checkout, the `healthdb` command 
 - Cite the source date, the record or document ID, and the evidence kind for each fact you rely on.
 - `clinical_date` is when something happened. `recorded_at` is when it was reported. Keep them distinct.
 - A historical clinical medication list does not override the current self-reported regimen.
-- Family history is not a patient diagnosis. A patient hypothesis is not a finding. A reported association does not establish causation.
+- Family history is not a patient diagnosis. A patient hypothesis is not a finding. A reported association does not establish causation, and neither does a derived association from the connections engine.
 - Agent research is interpretation. Retrieve it only explicitly, with `search_archive` and `include_research`, and label it as research.
 - Raw conversation is audit context. Retrieve it only with `include_conversation`.
 - Records that share a concept measure the same thing. They are not the same event, and a concept's `basis` and each record's `concept_basis` say how the match was made.

@@ -148,6 +148,24 @@ def capture_connector_messages(session_id, client, messages):
     return _write(apply, 'capture-connector-messages')
 
 
+def set_pooling_consent(opt_in):
+    """Opt the signed-in patient's chart in to or out of pooled patterns, and refresh them in the same transaction."""
+    import ingest
+    from associations import CONSENT_TEXT, CONSENT_VERSION
+    from common import connect, current_account
+    account = current_account()
+    with connect(admin=True) as conn:
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext('health_archive_schema'))")
+        ingest.migrate(conn)
+        conn.execute("""INSERT INTO health.pooling_consent(patient_id, user_id, opted_in, consent_version) VALUES (%s, %s, %s, %s)
+          ON CONFLICT (patient_id) DO UPDATE SET user_id=EXCLUDED.user_id, opted_in=EXCLUDED.opted_in,
+          consent_version=EXCLUDED.consent_version, updated_at=now()""", (account.patient_id, account.user_id, opt_in, CONSENT_VERSION))
+        conn.execute('INSERT INTO health.pooling_consent_events(patient_id, user_id, opted_in, consent_version) VALUES (%s, %s, %s, %s)',
+                     (account.patient_id, account.user_id, opt_in, CONSENT_VERSION))
+        patterns = ingest.refresh_pooled_patterns(conn)
+    return {'opted_in': opt_in, 'consent_version': CONSENT_VERSION, 'consent_text': CONSENT_TEXT, 'pooled_patterns': patterns}
+
+
 def put(paths):
     return ingest(put_paths=paths, operation='put')
 

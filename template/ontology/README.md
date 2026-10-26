@@ -15,12 +15,13 @@ Each record gets a **clinical type**: its category's type, unless its concept's 
 
 Each record whose type has a concept family joins one **concept**, matched in this order:
 
-1. A curated concept that lists the record's source code, or its normalized name (`match.names`, `match.name_patterns`, optionally limited to `match.categories`). Only records of the concept's family match.
+1. A curated concept that lists the record's source code, its normalized name (`match.names`, `match.name_patterns`), or, for a symptom or exposure report, its structured key (`match.key_patterns`), optionally limited to `match.categories`. Only records of the concept's family match. `symptom:swelling` joins every generalized or limb swelling key, and `exposure:alcohol` every alcohol key.
 2. A concept for the code the source supplied.
-3. A coded concept whose name the same kind of source records carry with exactly one code. Labcorp's uncoded "Creatinine" joins the LOINC 2160-0 concept that Quest and clinical records use.
-4. A concept for the normalized name within the family.
+3. For a symptom or exposure report, a concept for its structured key, such as `concept:key:symptom:night_sweats`. A report that a symptom is absent joins the same concept as one that it is present.
+4. A coded concept whose name the same kind of source records carry with exactly one code. Labcorp's uncoded "Creatinine" joins the LOINC 2160-0 concept that Quest and clinical records use.
+5. A concept for the normalized name within the family.
 
-Each `REPRESENTS_CONCEPT` edge records which of these matched. A coding marked `curated_standard_code` is a mapping made in this registry. It is never copied into a record, whose `code` stays exactly what the source supplied. Joining a concept says two records measure the same thing. It does not say they are the same event.
+Each `REPRESENTS_CONCEPT` edge records which of these matched. Concepts are what the connections engine compares: `DERIVED_ASSOCIATION` edges link an exposure concept to an outcome concept, with the method and strength as qualifiers. They are computed, not reported, and never establish causality. A coding marked `curated_standard_code` is a mapping made in this registry. It is never copied into a record, whose `code` stays exactly what the source supplied. Joining a concept says two records measure the same thing. It does not say they are the same event.
 
 ## Rules enforced on every write
 

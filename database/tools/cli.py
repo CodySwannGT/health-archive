@@ -165,6 +165,34 @@ def execute(conn,args):
               FROM health.resources x JOIN health.records r USING(record_id) WHERE x.is_current AND x.concept_id=%s
               ORDER BY x.clinical_date DESC NULLS LAST,x.recorded_at DESC NULLS LAST LIMIT %s''',(concept['concept_id'],args.limit)).fetchall()
         result=concept
+    elif args.command=='associations':
+        # Evidence-graded associations from this patient's records, with pooled context where at least five people share the pattern.
+        # Positive findings come first; background results grade confidence that an exposure cannot explain the pattern.
+        order=['insufficient','weak','moderate','strong']
+        result=conn.execute('''SELECT a.association_id,a.method,a.strength,a.direction,a.exposure_concept,a.exposure_label,a.outcome_concept,a.outcome_label,
+          a.statement,a.effect,a.competing,a.limitations,a.supporting_records,a.contrary_records,a.evidence_kind,a.last_seen_run,
+          CASE WHEN p.pattern_id IS NULL THEN NULL ELSE jsonb_build_object('contributors',p.contributors,'share_moderate_or_strong',p.share_moderate_or_strong,'median_effect',p.median_effect) END AS pooled_context
+          FROM health.associations a LEFT JOIN health.pooled_patterns p ON p.method=a.method AND p.exposure_key=a.exposure_pool_key AND p.outcome_key=a.outcome_pool_key AND p.direction=a.direction
+          WHERE a.is_current AND array_position(%s::text[],a.strength)>=array_position(%s::text[],%s::text)
+          AND (%s::text IS NULL OR a.method=%s) AND (a.exposure_concept ILIKE %s OR a.exposure_label ILIKE %s OR a.outcome_concept ILIKE %s OR a.outcome_label ILIKE %s)
+          ORDER BY a.method='constant_background',array_position(%s::text[],a.strength) DESC,a.outcome_label,a.exposure_label LIMIT %s''',
+          (order,order,args.min_strength,args.method,args.method,*['%'+args.concept+'%']*4,order,args.limit)).fetchall()
+    elif args.command=='pooled-patterns':
+        result=conn.execute('''SELECT pattern_id,method,exposure_key,exposure_label,outcome_key,outcome_label,direction,contributors,share_moderate_or_strong,median_effect,computed_at
+          FROM health.pooled_patterns WHERE exposure_label ILIKE %s OR exposure_key ILIKE %s OR outcome_label ILIKE %s OR outcome_key ILIKE %s
+          ORDER BY contributors DESC,share_moderate_or_strong DESC LIMIT %s''',(*['%'+args.concept+'%']*4,args.limit)).fetchall()
+    elif args.command=='check-in':
+        from datetime import date
+        from associations import check_in_plan, load_facts
+        account=current_account()
+        ids=[r['resource_id'] for r in conn.execute('SELECT resource_id FROM health.resources WHERE patient_id=%s AND is_current',(account.patient_id,))]
+        found=conn.execute('SELECT association_id,method,strength,exposure_concept,exposure_label,outcome_concept,outcome_label FROM health.associations WHERE is_current AND patient_id=%s',(account.patient_id,)).fetchall()
+        result={'date':(args.date or date.today().isoformat()),'items':check_in_plan(load_facts(conn,account.patient_id,ids),found,date.fromisoformat(args.date) if args.date else date.today(),args.days)}
+    elif args.command=='pooling':
+        from associations import CONSENT_TEXT, CONSENT_VERSION, MIN_CONTRIBUTORS
+        consent=conn.execute('SELECT opted_in,consent_version,updated_at FROM health.pooling_consent WHERE patient_id=%s',(current_account().patient_id,)).fetchone()
+        result={'opted_in':bool(consent and consent['opted_in']),'consent':consent,'current_consent_version':CONSENT_VERSION,'consent_text':CONSENT_TEXT,
+                'minimum_contributors':MIN_CONTRIBUTORS,'pooled_patterns':conn.execute('SELECT count(*) AS n FROM health.pooled_patterns').fetchone()['n']}
     elif args.command=='profile':
         result=conn.execute("SELECT resource_id,name,recorded_at,assertion,evidence_kind,normalized,provenance FROM health.resources WHERE is_current AND category='patient_demographics' ORDER BY recorded_at DESC NULLS LAST,name").fetchall()
     elif args.command=='activity':
@@ -197,6 +225,14 @@ def main():
     o=sub.add_parser('ontology',help='Show registered categories, clinical types and relations, with JSON Schema for one category');o.add_argument('--category');o.add_argument('--relations',action='store_true');o.add_argument('--types',action='store_true')
     cs=sub.add_parser('concepts',help='List concepts (tests, measurements, medications, conditions) with record counts');cs.add_argument('--search',default='');cs.add_argument('--family');cs.add_argument('--type');cs.add_argument('--limit',type=int,default=100)
     co=sub.add_parser('concept',help='One concept and its records from every source, newest first');co.add_argument('concept',help='Concept ID, such as body_weight or concept:body_weight, or its label');co.add_argument('--limit',type=int,default=200)
+    ac=sub.add_parser('associations',help='Evidence-graded associations the connections engine found in this archive, with pooled context')
+    ac.add_argument('--concept',default='',help='Match exposure or outcome concept ID or label');ac.add_argument('--min-strength',default='weak',choices=['insufficient','weak','moderate','strong'])
+    ac.add_argument('--method',choices=['exposure_episode_contrast','constant_background','exposure_series_change']);ac.add_argument('--limit',type=int,default=100)
+    pp=sub.add_parser('pooled-patterns',help='Patterns shared by at least five opted-in people. Aggregates only; never published');pp.add_argument('--concept',default='');pp.add_argument('--limit',type=int,default=100)
+    ci=sub.add_parser('check-in',help='What a daily check-in should ask: symptoms and exposures in open associations and the recent days with no report')
+    ci.add_argument('--date',help='Check-in date, YYYY-MM-DD; defaults to today');ci.add_argument('--days',type=int,default=14)
+    po=sub.add_parser('pooling',help='Show or change whether this chart contributes to pooled patterns')
+    choice=po.add_mutually_exclusive_group();choice.add_argument('--opt-in',action='store_true');choice.add_argument('--opt-out',action='store_true')
     sub.add_parser('verify')
     sub.add_parser('start')
     sub.add_parser('backup')
@@ -238,6 +274,9 @@ def main():
         elif args.command=='record-narrative':json_out(writes.record_narrative(args.source.resolve(),args.extraction.resolve(),args.revise,args.dry_run))
         else:json_out(writes.record_medication(args.source.resolve(),args.row.resolve(),args.report,args.dry_run))
         return
+    if args.command=='pooling' and (args.opt_in or args.opt_out):
+        import writes
+        json_out(writes.set_pooling_consent(args.opt_in));return
     if args.command=='import-history':
         from import_history import import_history, verify_history
         json_out(verify_history(args.repository,args.git_dir) if args.verify else import_history(args.repository,args.git_dir,args.omit_content));return

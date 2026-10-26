@@ -357,6 +357,38 @@
       ]
     },
     {
+      "relation": "DERIVED_ASSOCIATION",
+      "semantics": "derived_association",
+      "description": "The connections engine found a pattern between an exposure concept and an outcome concept in this patient's dated records. A computed association with a stated method and evidence strength, never a cause or a clinical finding. The associations table holds its supporting and contrary records, competing explanations and limitations.",
+      "establishes_causality": false,
+      "status": "active",
+      "domain": [
+        "@Concept"
+      ],
+      "range": [
+        "@Concept"
+      ],
+      "qualifiers": {
+        "method": {
+          "required": true,
+          "enum": [
+            "exposure_series_change",
+            "exposure_episode_contrast",
+            "constant_background"
+          ]
+        },
+        "strength": {
+          "required": true,
+          "enum": [
+            "insufficient",
+            "weak",
+            "moderate",
+            "strong"
+          ]
+        }
+      }
+    },
+    {
       "relation": "REPRESENTS_CONCEPT",
       "semantics": "terminology",
       "description": "Record is about this concept: a test, measurement, medication or condition. The edge's evidence kind says how it was matched: by the source's own code, by the curated concept registry, or by name.",

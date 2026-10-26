@@ -28,11 +28,13 @@ def _verify_semantics(conn,patient):
     definition=lambda table,key:[r['definition'] for r in conn.execute(f'SELECT definition FROM health.{table} WHERE patient_id=%s ORDER BY {key}',(patient,))]
     types=[dict(r) for r in conn.execute('SELECT clinical_type,label,parent,fhir_resource,concept_family,description FROM health.clinical_types WHERE patient_id=%s',(patient,))]
     registry=Registry(definition('ontology_categories','category'),definition('ontology_relations','relation'),types,[])
-    resources={r['resource_id']:r for r in conn.execute('SELECT resource_id,category,name,clinical_type,concept_id,assertion FROM health.resources WHERE patient_id=%s AND is_current',(patient,))}
+    resources={r['resource_id']:r for r in conn.execute('''SELECT resource_id,category,name,clinical_type,concept_id,assertion,
+      coalesce(normalized#>>'{source_details,details,symptom_key}',normalized#>>'{source_details,details,exposure_key}') AS key
+      FROM health.resources WHERE patient_id=%s AND is_current''',(patient,))}
     untyped=[rid for rid,r in resources.items() if r['clinical_type'] not in registry.types]
     assert not untyped,('records without a registered clinical type',untyped[:5])
     concepts={r['concept_id'] for r in conn.execute('SELECT concept_id FROM health.concepts WHERE patient_id=%s',(patient,))}
-    missing=[rid for rid,r in resources.items() if concept_eligible(registry,r['category'],r['name'],r['assertion']) and r['concept_id'] not in concepts]
+    missing=[rid for rid,r in resources.items() if concept_eligible(registry,r['category'],r['name'],r['assertion'],r['key']) and r['concept_id'] not in concepts]
     assert not missing,('concept-eligible records without a concept',missing[:5])
     every={r['resource_id']:r for r in conn.execute('SELECT resource_id,category,clinical_type FROM health.resources WHERE patient_id=%s',(patient,))}
     documents={r['document_id'] for r in conn.execute('SELECT document_id FROM health.documents WHERE patient_id=%s',(patient,))}
@@ -50,6 +52,32 @@ def _verify_semantics(conn,patient):
     assert not problems,problems[:10]
     return {'clinical_types':len(registry.types),'concepts':len(concepts),'current_records_with_concepts':sum(1 for r in resources.values() if r['concept_id']),
             'current_edges_follow_relation_rules':len(edges)}
+
+
+def _verify_connections(conn,patient):
+    """Stored associations equal a fresh computation from current records, cite only current records, and pooled
+    patterns equal a fresh aggregate of opted-in charts with at least the minimum number of contributors."""
+    from associations import MIN_CONTRIBUTORS, find_associations, load_facts, pooled_patterns
+    ids=[r['resource_id'] for r in conn.execute('SELECT resource_id FROM health.resources WHERE patient_id=%s AND is_current',(patient,))]
+    expected={a['association_id']:digest(a) for a in find_associations(load_facts(conn,patient,ids))}
+    stored={r['association_id']:r for r in conn.execute('SELECT association_id,version_sha256,supporting_records,contrary_records FROM health.associations WHERE patient_id=%s AND is_current',(patient,))}
+    assert {k:r['version_sha256'] for k,r in stored.items()}==expected,('associations differ from a fresh computation',sorted(set(stored)^set(expected))[:5])
+    current=set(ids)
+    cited={rid for r in stored.values() for rid in r['supporting_records']+r['contrary_records']}
+    assert cited<=current,('associations cite non-current records',sorted(cited-current)[:5])
+    versions=conn.execute('SELECT count(*) AS n FROM health.associations a WHERE patient_id=%s AND NOT EXISTS (SELECT 1 FROM health.association_versions v WHERE v.patient_id=a.patient_id AND v.association_id=a.association_id AND v.version_sha256=a.version_sha256)',(patient,)).fetchone()['n']
+    assert versions==0,('associations without a preserved version',versions)
+    rows=conn.execute('''SELECT a.patient_id,a.method,a.exposure_pool_key,a.exposure_label,a.outcome_pool_key,a.outcome_label,a.direction,a.strength,a.effect
+      FROM health.associations a JOIN health.pooling_consent c ON c.patient_id=a.patient_id AND c.opted_in WHERE a.is_current''').fetchall()
+    fresh={p['pattern_id']:p['contributors'] for p in pooled_patterns([tuple(r.values()) for r in rows],MIN_CONTRIBUTORS)}
+    pooled={r['pattern_id']:r['contributors'] for r in conn.execute('SELECT pattern_id,contributors FROM health.pooled_patterns')}
+    assert pooled==fresh,'pooled patterns differ from a fresh aggregate of opted-in charts'
+    assert all(n>=MIN_CONTRIBUTORS for n in pooled.values())
+    columns={r['column_name'] for r in conn.execute("SELECT column_name FROM information_schema.columns WHERE table_schema='health' AND table_name='pooled_patterns'")}
+    assert not columns&{'patient_id','user_id','record_id','resource_id','clinical_date'},columns
+    consent=conn.execute('SELECT opted_in FROM health.pooling_consent WHERE patient_id=%s',(patient,)).fetchone()
+    return {'current_associations':len(stored),'associations_match_fresh_computation':True,
+            'pooled_patterns':len(pooled),'pooling_opted_in':bool(consent and consent['opted_in']),'pool_minimum_contributors':MIN_CONTRIBUTORS}
 
 
 def _verify(checkout):
@@ -77,6 +105,7 @@ def _verify(checkout):
           (SELECT 1 FROM health.relationships r WHERE r.patient_id=x.patient_id AND r.from_id=x.resource_id AND r.relation='INSTANCE_OF' AND r.to_id='ontology:'||x.category)""",(PATIENT,)).fetchone()['n']
         assert missing==0,missing
         checks['ontology']={'categories':len(categories),'relations':len(relations),'current_resources_typed':True,**semantics}
+        checks['connections']=_verify_connections(conn,PATIENT)
         current_payloads={r['record_id']:r['payload'] for r in conn.execute('SELECT record_id,payload FROM health.current_records WHERE patient_id=%s',(PATIENT,))}
         version_payloads={(r['record_id'],r['version_sha256']):r['payload'] for r in conn.execute('SELECT v.record_id,v.version_sha256,v.payload FROM health.record_versions v JOIN health.records r USING(record_id) WHERE r.patient_id=%s',(PATIENT,))}
         observations={}

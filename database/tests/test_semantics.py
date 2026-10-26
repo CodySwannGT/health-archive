@@ -37,10 +37,10 @@ class ConceptTest(unittest.TestCase):
 
     def test_weight_joins_across_sources_and_keeps_clinical_types(self):
         concepts, assigned = assign_concepts(self.registry, {
-            'clinic': ('vitals', 'Body weight', LOINC, '29463-7', 'source_record'),
-            'patient': ('anthropometric_measurement', 'Body weight', None, None, 'reported'),
-            'pulse': ('blood_donor_screening', 'pulse', None, None, 'source_record'),
-            'iron': ('blood_donor_screening', 'iron count', None, None, 'source_record'),
+            'clinic': ('vitals', 'Body weight', LOINC, '29463-7', 'source_record', None),
+            'patient': ('anthropometric_measurement', 'Body weight', None, None, 'reported', None),
+            'pulse': ('blood_donor_screening', 'pulse', None, None, 'source_record', None),
+            'iron': ('blood_donor_screening', 'iron count', None, None, 'source_record', None),
         })
         self.assertEqual(assigned['clinic'][:2], ('concept:body_weight', 'source_code'))
         self.assertEqual(assigned['patient'][:2], ('concept:body_weight', 'curated_name_match'))
@@ -53,11 +53,11 @@ class ConceptTest(unittest.TestCase):
 
     def test_uncoded_lab_joins_a_uniquely_coded_name_but_not_an_ambiguous_one(self):
         concepts, assigned = assign_concepts(self.registry, {
-            'quest': ('laboratory', 'CREATININE', LOINC, '2160-0', 'source_record'),
-            'labcorp': ('laboratory', 'Creatinine', None, None, 'source_record'),
-            'a': ('laboratory', 'Glucose', LOINC, '2345-7', 'source_record'),
-            'b': ('lab_results', 'Glucose', LOINC, '2339-0', 'source_record'),
-            'c': ('laboratory', 'Glucose', None, None, 'source_record'),
+            'quest': ('laboratory', 'CREATININE', LOINC, '2160-0', 'source_record', None),
+            'labcorp': ('laboratory', 'Creatinine', None, None, 'source_record', None),
+            'a': ('laboratory', 'Glucose', LOINC, '2345-7', 'source_record', None),
+            'b': ('lab_results', 'Glucose', LOINC, '2339-0', 'source_record', None),
+            'c': ('laboratory', 'Glucose', None, None, 'source_record', None),
         })
         self.assertEqual(assigned['labcorp'][:2], (f'concept:code:{LOINC}|2160-0', 'name_matches_coded_source_record'))
         self.assertEqual(assigned['c'][:2], ('concept:name:measurement:glucose', 'source_name'))
@@ -65,9 +65,9 @@ class ConceptTest(unittest.TestCase):
 
     def test_records_without_a_concept_family_or_absence_statements_get_none(self):
         _, assigned = assign_concepts(self.registry, {
-            'note': ('patient_hypothesis', 'Swelling from alcohol', None, None, 'hypothesis'),
-            'none': ('medications', 'No known medications', None, None, 'source_absence_statement'),
-            'unnamed': ('lab_results', 'lab_results', None, None, 'source_record'),
+            'note': ('patient_hypothesis', 'Swelling from alcohol', None, None, 'hypothesis', None),
+            'none': ('medications', 'No known medications', None, None, 'source_absence_statement', None),
+            'unnamed': ('lab_results', 'lab_results', None, None, 'source_record', None),
         })
         self.assertIsNone(assigned['unnamed'][0])
         self.assertEqual(assigned['note'], (None, None, 'patient_hypothesis'))
@@ -82,12 +82,29 @@ class ConceptTest(unittest.TestCase):
         registry = Registry(load('categories.json', 'categories'), load('relations.json', 'relations'),
                             load('clinical-types.json', 'clinical_types'), [medication])
         _, assigned = assign_concepts(registry, {
-            'regimen': ('medication_regimen', 'Furosemide', None, None, 'reported'),
-            'response': ('medication_response', 'Furosemide reduced swelling', None, None, 'reported'),
+            'regimen': ('medication_regimen', 'Furosemide', None, None, 'reported', None),
+            'response': ('medication_response', 'Furosemide reduced swelling', None, None, 'reported', None),
         })
         self.assertEqual(assigned['regimen'][:2], ('concept:medication:furosemide', 'curated_name_match'))
         self.assertEqual(assigned['regimen'][2], 'medication_statement')
         self.assertEqual(assigned['response'], (None, None, 'medication_response'))
+
+    def test_symptoms_and_exposures_join_by_structured_key(self):
+        concepts, assigned = assign_concepts(self.registry, {
+            'onset': ('symptom_observation', 'Swelling started Saturday night', None, None, 'present', 'swelling_generalized_feet_ankles'),
+            'gone': ('symptom_observation', 'Swelling gone by Monday morning', None, None, 'absent', 'swelling_generalized_feet_ankles'),
+            'residual': ('symptom_observation', 'Still swollen a bit after cardio', None, None, 'present', 'residual_swelling_post_cardio'),
+            'lip': ('symptom_observation', 'No current lip swelling', None, None, 'absent', 'lip_swelling'),
+            'drinks': ('reported_exposure', '10 alcoholic drinks at night', None, None, 'present', 'alcohol'),
+            'none': ('reported_exposure', 'No alcohol (x0) at night', None, None, 'absent', 'alcohol'),
+            'sweats': ('symptom_observation', 'Heavy night sweating', None, None, 'present', 'night_sweats'),
+        })
+        for rid in ('onset', 'gone', 'residual'):
+            self.assertEqual(assigned[rid][:2], ('concept:symptom:swelling', 'curated_key_match'))
+        self.assertEqual(assigned['lip'][:2], ('concept:key:symptom:lip_swelling', 'source_key'))
+        self.assertEqual(assigned['drinks'][0], 'concept:exposure:alcohol')
+        self.assertEqual(assigned['none'][0], 'concept:exposure:alcohol')
+        self.assertEqual(concepts['concept:key:symptom:night_sweats']['basis'], 'source_key')
 
 
 class EdgeRuleTest(unittest.TestCase):
