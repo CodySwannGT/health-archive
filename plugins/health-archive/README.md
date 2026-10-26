@@ -44,7 +44,7 @@ Scopes: `health.read` for queries, `health.write` for `record_narrative`, `recor
 | `search_archive` | Search with excerpts and options for research, conversation or history |
 | `labs`, `medications`, `symptoms`, `vitals`, `anthropometrics`, `activity`, `profile`, `timeline` | Domain queries |
 | `concepts`, `concept` | Tests, measurements and medications that join records across sources, and one concept's records over time |
-| `associations`, `check_in` | Evidence-graded connections in the person's own records, and what a daily check-in should ask |
+| `associations`, `check_in` | Evidence-graded connections in the person's own records, and the morning check-in agenda |
 | `pooled_patterns`, `pooling`, `set_pooling` | Patterns shared by at least five opted-in people, and the person's opt-in. Aggregates only; never published |
 | `get_record`, `get_document`, `graph`, `ontology`, `status`, `query` | Records, documents, graph, ontology, status and bounded read-only SQL |
 | `record_narrative`, `record_medication`, `capture_conversation` | Writes. Each runs in one transaction against the database archive |
@@ -54,7 +54,8 @@ Scopes: `health.read` for queries, `health.write` for `record_narrative`, `recor
 | Skill | Use |
 | --- | --- |
 | `health-archive-grounding` | Query the archive before answering, and keep evidence kinds distinct |
-| `health-connections` | Relay evidence-graded connections, compare explanations, and run a daily check-in |
+| `health-connections` | Relay evidence-graded connections and compare explanations |
+| `health-daily-check-in` | Run the morning check-in like a triage nurse and record every answer, including "no" |
 | `health-conversation-audit` | Capture each turn and preserve corrections and clarifications |
 | `health-record-narrative` | Record symptoms, vitals, weights, exposures and hypotheses as quote-backed records |
 | `health-record-medication` | Record regimens, changes, holds and single doses |

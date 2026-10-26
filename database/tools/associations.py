@@ -41,6 +41,11 @@ SERIES_LOOKBACK_DAYS = 60
 # at least a week of measurements after it to be more than insufficient.
 BASELINE_DAYS = 14
 FOLLOW_UP_DAYS = 7
+# Derived exposures. Seven hours is the adult minimum the American Academy of
+# Sleep Medicine recommends; a night under it counts as short sleep.
+WORKOUT = 'concept:derived:workout'
+SHORT_SLEEP = 'concept:derived:short_sleep'
+SHORT_SLEEP_HOURS = 7
 # A pooled pattern needs at least this many distinct opted-in patients. The
 # database enforces the same floor; configuration can only raise it.
 MIN_CONTRIBUTORS = max(5, int(os.environ.get('HEALTH_POOL_MIN_CONTRIBUTORS', '5')))
@@ -64,7 +69,7 @@ def pool_key(concept_id, basis, family, label, generic=None):
     pool by generic name, so linaclotide is one medication whatever brand a record
     names. Without a known generic they pool by the label without brand, form or
     dose, because curated concepts belong to one archive and codes miss self-reports."""
-    if family != 'medication' and basis in ('curated_registry', 'source_code', 'source_key'):
+    if family != 'medication' and basis in ('curated_registry', 'source_code', 'source_key', 'engine_derived'):
         return concept_id
     if family == 'medication' and generic:
         return f'medication:{generic}'
@@ -131,20 +136,23 @@ class Timeline:
 
 
 def daily(observations):
-    """Per concept and day: present if any record that day says present, else absent; the records behind each."""
+    """Per concept and day: present if any record that day says present, else absent; the records behind each.
+
+    A day's amount is the largest reported, or the sum for observations marked
+    `sum_amounts`, such as two workouts in one day."""
     days = {}
     for o in observations:
         key = (o['concept'], o['date'])
-        entry = days.setdefault(key, {'present': False, 'absent': False, 'records': [], 'amount': None})
+        entry = days.setdefault(key, {'present': False, 'absent': False, 'records': [], 'amount': None, 'unit': o.get('amount_unit')})
         entry[o['assertion']] = True
         entry['records'].append(o['rid'])
         if o.get('amount') is not None:
-            entry['amount'] = max(entry['amount'] or 0, o['amount'])
+            entry['amount'] = (entry['amount'] or 0) + o['amount'] if o.get('sum_amounts') else max(entry['amount'] or 0, o['amount'])
     result = {}
     for (concept, day), e in days.items():
         state = 'present' if e['present'] else 'absent'
         amount = e['amount'] if e['amount'] is not None else (0 if state == 'absent' else None)
-        result.setdefault(concept, {})[day] = {'state': state, 'records': sorted(e['records']), 'amount': amount}
+        result.setdefault(concept, {})[day] = {'state': state, 'records': sorted(e['records']), 'amount': amount, 'unit': e['unit']}
     return result
 
 
@@ -261,6 +269,7 @@ def find_associations(facts):
                                             if source[d - timedelta(days=best['lag_days'])]['amount'] is not None]
                     sick, well = amounts(cells['a'] + cells['c']), amounts(cells['b'] + cells['d'])
                     if sick and well:
+                        effect['amount_unit'] = next((v['unit'] for v in source.values() if v['unit']), None)
                         effect['mean_amount_on_symptom_days'] = round(sum(sick) / len(sick), 1)
                         effect['mean_amount_on_symptom_free_days'] = round(sum(well) / len(well), 1)
                 detail = (f' {o_label} was reported on {a} of {a + b} observed day(s) {when} {e_label}, '
@@ -371,52 +380,127 @@ def find_associations(facts):
     return results
 
 
-def check_in_plan(facts, associations, today, window=14, active_days=60):
-    """What a daily check-in should ask about, and the recent days with no report for each.
+RED_FLAGS = ['chest pain or pressure', 'trouble breathing', 'fainting or nearly fainting', 'black or tarry stool, or vomiting blood',
+             'severe belly pain', 'swelling of the lips, tongue or throat', 'sudden weakness, confusion or trouble speaking',
+             'thoughts of harming yourself']
+# Active symptoms that also belong in the urgent screen, by concept or label.
+RED_FLAG_PATTERN = re.compile(r'(black|tarry|dark)[ _]stool|blood|chest[ _]pain|short(ness)?[ _]of[ _]breath|faint', re.I)
+STOOL_PATTERN = re.compile(r'stool|constipat|diarrh|bowel|rectum', re.I)
 
-    Two reasons put a concept on the list: it is in an open association, or it
-    is an active symptom: described as ongoing (current, recurring or a
-    treatment response) without being tied to one day, within `active_days`,
-    and not reported absent since. A report about one day, such as sweating
-    after one workout, and a lifelong trait are not active. Active symptoms are often the ones with no dated
-    reports at all, so no association can exist yet; asking is how one can."""
-    days = [today - timedelta(days=i) for i in range(window)]
+
+def check_in_plan(facts, associations, today, window=14, active_days=60):
+    """The morning check-in agenda, in order, built from the patient's records.
+
+    Steps: urgent screen, open question, tracked measurements, sleep, yesterday's
+    workout, medication changes and as-needed doses, exposures, each symptom,
+    an offer to fill in missed days, and the read-back. Symptoms come from open
+    associations and from active symptoms: present when last reported, within
+    `active_days`, and either described as ongoing (current, recurring or a
+    treatment response, not tied to one day) or reported at the last check-in.
+    A one-off report about an earlier day and a lifelong trait are not active."""
     recorded = daily(facts['observations'])
-    items = {}
+    since = facts.get('last_reported')
+    since = since if since and since < today else None
+    since_text = f'{since:%A}, {since:%B} {since.day}' if since else 'your last check-in'
+    symptoms, exposures = {}, {}
     for a in associations:
         if a['strength'] == 'strong' and a['method'] != 'exposure_episode_contrast':
             continue
         for concept, label in ((a['outcome_concept'], a['outcome_label']), (a['exposure_concept'], a['exposure_label'])):
-            if concept in recorded:
-                item = items.setdefault(concept, {'label': label, 'associations': set(), 'reasons': set()})
-                item['associations'].add(a['association_id'])
-                item['reasons'].add('association')
-    kinds = {r['concept']: r['kind'] for r in facts.get('reports', [])}
-    kinds.update({o['concept']: o['kind'] for o in facts['observations']})
-    latest = {}
-    for r in sorted(facts.get('reports', []), key=lambda r: (r['reported'], r['assertion'] == 'present')):
+            if concept not in recorded:
+                continue
+            kind = next(o['kind'] for o in facts['observations'] if o['concept'] == concept)
+            target = symptoms if kind == 'symptom' else exposures
+            item = target.setdefault(concept, {'label': label, 'associations': set(), 'reasons': set()})
+            item['associations'].add(a['association_id'])
+            item['reasons'].add('association')
+    def last_state(concept):
+        # The most recent dated observation or report of the symptom, whichever is later.
+        dated = [(d, v['state']) for d, v in recorded.get(concept, {}).items()]
+        reported = [(r['reported'], r['assertion']) for r in facts.get('reports', []) if r['concept'] == concept and r['assertion'] in ('present', 'absent')]
+        return max(dated + reported, default=(None, None), key=lambda x: (x[0], x[1] == 'present'))
+
+    # Active: present at the latest report, within active_days, and either described as ongoing
+    # (not tied to one day) or reported at the last check-in, so the nurse asks whether it is still there.
+    by_concept = {}
+    for r in facts.get('reports', []):
         if r['kind'] == 'symptom' and r['assertion'] in ('present', 'absent'):
-            latest[r['concept']] = r
-    for concept, r in latest.items():
-        ongoing = not r.get('dated') and r.get('scope') in (None, 'current_state', 'recurring_pattern', 'treatment_response')
-        if r['assertion'] == 'present' and ongoing and (today - r['reported']).days <= active_days:
-            item = items.setdefault(concept, {'label': r['label'], 'associations': set(), 'reasons': set()})
+            by_concept.setdefault(r['concept'], []).append(r)
+    for concept, reports in by_concept.items():
+        day, state = last_state(concept)
+        ongoing = any(not r.get('dated') and r.get('scope') in (None, 'current_state', 'recurring_pattern', 'treatment_response')
+                      and r['assertion'] == 'present' for r in reports)
+        at_last_check_in = since is not None and day == since
+        if state == 'present' and (today - day).days <= active_days and (ongoing or at_last_check_in):
+            item = symptoms.setdefault(concept, {'label': reports[-1]['label'], 'associations': set(), 'reasons': set()})
             item['reasons'].add('active_symptom')
-            item['last_reported_present'] = r['reported'].isoformat()
-    plan = []
-    for concept, item in sorted(items.items()):
-        missing = [d.isoformat() for d in days if d not in recorded.get(concept, {})]
-        kind = kinds[concept]
-        plan.append({'concept': concept, 'label': item['label'], 'kind': kind, 'reasons': sorted(item['reasons']),
-                     'last_reported_present': item.get('last_reported_present'),
-                     'unreported_days': missing, 'reported_days': window - len(missing), 'association_count': len(item['associations']),
-                     'ask': (f"Any {item['label'].lower()} today, and how much?" if kind == 'exposure'
-                             else f"Did you have any {item['label'].lower()} today?") + ' Record "none" too, as an explicit absence.'})
-    # Concepts in associations first, then active symptoms reported most recently.
-    plan.sort(key=lambda p: p['label'])
-    plan.sort(key=lambda p: p['last_reported_present'] or '', reverse=True)
-    plan.sort(key=lambda p: p['association_count'], reverse=True)
-    return plan
+
+    symptom_items = []
+    for concept, item in symptoms.items():
+        day, state = last_state(concept)
+        label = item['label']
+        symptom_items.append({
+            'concept': concept, 'label': label, 'reasons': sorted(item['reasons']), 'association_count': len(item['associations']),
+            'last_state': state, 'last_state_date': day.isoformat() if day else None,
+            'ask': f'Do you still have {label.lower()}?',
+            'if_yes': 'Ask when (last night, this morning, all day), severity 0 to 10, and better, same or worse than last time.'
+                      + (' Ask the Bristol stool type (1 to 7).' if STOOL_PATTERN.search(concept + ' ' + label) else ''),
+            'if_no': 'Ask when it stopped, and record it as absent from that day.' if state == 'present'
+                     else 'Record it as absent today.',
+            'bristol': bool(STOOL_PATTERN.search(concept + ' ' + label))})
+    symptom_items.sort(key=lambda i: i['label'])
+    symptom_items.sort(key=lambda i: i['last_state_date'] or '', reverse=True)
+    symptom_items.sort(key=lambda i: i['association_count'], reverse=True)
+
+    urgent = list(RED_FLAGS) + [f"{i['label']} (you reported it {i['last_state_date']})" for i in symptom_items
+                                if RED_FLAG_PATTERN.search(i['concept'] + ' ' + i['label'])]
+    order = ['concept:body_weight', 'concept:systolic_blood_pressure', 'concept:diastolic_blood_pressure', 'concept:heart_rate']
+    measured = sorted(facts.get('reported_measurements', {}).items(), key=lambda m: (order.index(m[0]) if m[0] in order else len(order), m[1]['label']))
+    measurements = [{'concept': c, 'label': m['label'], 'unit': m['unit'], 'last_reported': m['last'].isoformat()}
+                    for c, m in measured if (today - m['last']).days <= 30]
+    drinks = any(o['concept'] == 'concept:exposure:alcohol' and o['assertion'] == 'present' and (today - o['date']).days <= 90
+                 for o in facts['observations'])
+    exposure_items = []
+    if drinks or 'concept:exposure:alcohol' in exposures:
+        exposure_items.append({'concept': 'concept:exposure:alcohol', 'label': 'Alcohol intake',
+                               'ask': 'How many drinks did you have yesterday, and roughly when?', 'record_as': 'reported_exposure with a drink-count amount; 0 drinks is absent'})
+    for concept, item in sorted(exposures.items()):
+        if concept.startswith(('concept:derived:', 'concept:medication:')) or concept == 'concept:exposure:alcohol' \
+                or any(m['concept'] == concept for m in facts['medications']):
+            continue
+        exposure_items.append({'concept': concept, 'label': item['label'], 'ask': f"Any {item['label'].lower()} yesterday, and how much?",
+                               'record_as': 'reported_exposure; none is absent'})
+
+    days_seen = {o['date'] for o in facts['observations']} | {d for m in facts.get('reported_measurements', {}).values() for d in m['dates']}
+    first = max(today - timedelta(days=window), since or today - timedelta(days=window))
+    missed = [(first + timedelta(days=i)).isoformat() for i in range((today - first).days)
+              if first + timedelta(days=i) not in days_seen and first + timedelta(days=i) != today]
+
+    steps = [
+        {'key': 'opening', 'say': f"Morning check-in for {today:%A}, {today:%B} {today.day}." + (f' Your last check-in was {since_text}, so this covers since then.' if since else '')},
+        {'key': 'urgent', 'ask': 'Before we start: since ' + since_text + ', have you had any of these?', 'items': urgent,
+         'on_yes': 'Stop the check-in. Advise urgent care or emergency services as appropriate, and record what was reported.'},
+        {'key': 'open', 'ask': f'Anything new or different since {since_text}, good or bad?',
+         'record_as': 'whatever fits: symptom_observation, reported_exposure, patient_context'},
+        {'key': 'measurements', 'ask': 'What were your ' + ', '.join(m['label'].lower() for m in measurements) + ' this morning?',
+         'items': measurements, 'record_as': 'anthropometric_measurement, vital_sign_measurement (blood pressure components paired)'} if measurements else None,
+        {'key': 'sleep', 'ask': 'How did you sleep last night? When did you go to bed and get up, and did you wake up during the night?',
+         'record_as': 'sleep_observation dated today'},
+        {'key': 'workout', 'ask': 'Did you work out yesterday? If so, describe it, for example 40 minutes of cardio twice, or 90 minutes of weight training.',
+         'record_as': 'exercise_session dated yesterday, one per session; status none_reported for no workout'},
+        {'key': 'medications', 'asks': [f'Have you added, changed or stopped any medications since {since_text}?',
+                                        f'Have you taken any as-needed medications since {since_text}?'],
+         'record_as': 'record_medication: medication_change for changes, medication_administration for as-needed doses'},
+        {'key': 'exposures', 'items': exposure_items} if exposure_items else None,
+        {'key': 'symptoms', 'items': symptom_items, 'scales': {'severity': '0 to 10, 0 none and 10 worst imaginable', 'stool': 'Bristol type 1 to 7'},
+         'record_as': 'symptom_observation per symptom with occurrence date, numeric_severity and, for stool, stool_form'} if symptom_items else None,
+        {'key': 'missed_days', 'days': missed,
+         'ask': 'I have no check-in for ' + ', '.join(missed) + '. Do you want to fill any of those in? It is fine if you do not remember.',
+         'on_yes': 'Ask only about the days and items they can recall; note in source_context that the answers are recalled.'} if missed else None,
+        {'key': 'close', 'say': 'Read back everything you will record, confirm it, record it, then call associations and share what changed in a line or two, plus any safety note.'},
+    ]
+    return {'date': today.isoformat(), 'covers_since': since.isoformat() if since else None,
+            'steps': [dict(step=n, **s) for n, s in enumerate([s for s in steps if s], 1)]}
 
 
 def pooled_patterns(rows, minimum):
@@ -500,6 +584,23 @@ def load_facts(conn, patient, resource_ids):
                                  'kind': kind, 'date': day, 'assertion': r['assertion'],
                                  'date_basis': 'occurrence' if r['clinical_date'] else 'current_state_on_report_date',
                                  'amount': amount.get('value') if isinstance(amount.get('value'), (int, float)) else None})
+    # Workouts and short nights are exposures the engine derives from activity and sleep reports.
+    for r in rows:
+        details = ((r['details'] or {}).get('details') or {})
+        if r['category'] == 'exercise_session' and r['clinical_date']:
+            done = details.get('status') == 'completed_reported'
+            minutes = (details.get('duration') or {}).get('value')
+            observations.append({'rid': r['resource_id'], 'concept': WORKOUT, 'label': 'Workout', 'family': 'exposure', 'kind': 'exposure',
+                                 'date': r['clinical_date'], 'assertion': 'present' if done else 'absent', 'date_basis': 'occurrence',
+                                 'amount': minutes if done else 0, 'amount_unit': 'min', 'sum_amounts': True})
+        if r['category'] == 'sleep_observation' and r['clinical_date'] and r['numeric_value'] is not None:
+            observations.append({'rid': r['resource_id'], 'concept': SHORT_SLEEP, 'label': f'Short sleep (under {SHORT_SLEEP_HOURS:g} h)',
+                                 'family': 'exposure', 'kind': 'exposure', 'date': r['clinical_date'], 'date_basis': 'occurrence',
+                                 'assertion': 'present' if r['numeric_value'] < SHORT_SLEEP_HOURS else 'absent',
+                                 'amount': r['numeric_value'], 'amount_unit': 'h slept'})
+    for derived, name in ((WORKOUT, 'Workout'), (SHORT_SLEEP, f'Short sleep (under {SHORT_SLEEP_HOURS:g} h)')):
+        if any(o['concept'] == derived for o in observations):
+            concepts[derived] = ('engine_derived', 'exposure', name, None, ())
     medications = {}
     for r in rows:
         d = r['details'] or {}
@@ -523,4 +624,12 @@ def load_facts(conn, patient, resource_ids):
     for s in series.values():
         # One unit per series, the most common; mixed units are never converted here.
         s['unit'], s['points'] = max(s['points'].items(), key=lambda item: (len(item[1]), str(item[0])))
-    return {'observations': observations, 'reports': reports, 'medications': list(medications.values()), 'series': series, 'concepts': concepts}
+    reported_measurements = {}
+    for r in rows:
+        if r['category'] in ('anthropometric_measurement', 'vital_sign_measurement') and r['concept_id'] and r['clinical_date']:
+            m = reported_measurements.setdefault(r['concept_id'], {'label': label(r), 'unit': r['unit'], 'dates': set()})
+            m['dates'].add(r['clinical_date'])
+            m['last'] = max(m['dates'])
+    reported_dates = [as_date(d) for d in ((r['details'] or {}).get('reported_local_date') for r in rows) if d]
+    return {'observations': observations, 'reports': reports, 'medications': list(medications.values()), 'series': series,
+            'concepts': concepts, 'reported_measurements': reported_measurements, 'last_reported': max(reported_dates, default=None)}

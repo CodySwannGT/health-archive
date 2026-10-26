@@ -4,7 +4,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from associations import check_in_plan, find_associations, fisher_greater, pool_key, pooled_patterns, slope_per_week
+from associations import SHORT_SLEEP, WORKOUT, check_in_plan, daily, find_associations, fisher_greater, pool_key, pooled_patterns, slope_per_week
 
 D = lambda day: date(2026, 10, day)
 
@@ -73,6 +73,26 @@ class EpisodeTest(unittest.TestCase):
 
     def test_results_are_deterministic(self):
         self.assertEqual(find_associations(swelling_facts()), find_associations(swelling_facts()))
+
+
+class DerivedExposureTest(unittest.TestCase):
+    def test_workouts_sum_per_day_and_short_sleep_is_compared(self):
+        sessions = [{'rid': 'w1', 'concept': WORKOUT, 'label': 'Workout', 'family': 'exposure', 'kind': 'exposure', 'date': D(1),
+                     'assertion': 'present', 'amount': 40, 'amount_unit': 'min', 'sum_amounts': True},
+                    {'rid': 'w2', 'concept': WORKOUT, 'label': 'Workout', 'family': 'exposure', 'kind': 'exposure', 'date': D(1),
+                     'assertion': 'present', 'amount': 40, 'amount_unit': 'min', 'sum_amounts': True}]
+        self.assertEqual(daily(sessions)[WORKOUT][D(1)]['amount'], 80)
+        hours = {1: 5, 2: 5.5, 3: 8, 4: 7.5, 5: 5, 6: 8, 7: 6, 8: 8}
+        headache = {1: 'present', 2: 'present', 3: 'absent', 4: 'absent', 5: 'present', 6: 'absent', 7: 'present', 8: 'absent'}
+        facts = {'medications': [], 'series': {}, 'concepts': {},
+                 'observations': [{'rid': f'n{d}', 'concept': SHORT_SLEEP, 'label': 'Short sleep (under 7 h)', 'family': 'exposure', 'kind': 'exposure',
+                                   'date': D(d), 'assertion': 'present' if h < 7 else 'absent', 'amount': h, 'amount_unit': 'h slept'} for d, h in hours.items()]
+                                 + [observation(f'h{d}', 'concept:key:symptom:headache', 'symptom', d, st, label='headache') for d, st in headache.items()]}
+        [a] = find_associations(facts)
+        self.assertEqual((a['exposure_concept'], a['strength']), (SHORT_SLEEP, 'strong'))
+        self.assertEqual(a['effect']['amount_unit'], 'h slept')
+        self.assertLess(a['effect']['mean_amount_on_symptom_days'], a['effect']['mean_amount_on_symptom_free_days'])
+        self.assertEqual(pool_key(SHORT_SLEEP, 'engine_derived', 'exposure', 'Short sleep'), SHORT_SLEEP)
 
 
 class SeriesTest(unittest.TestCase):
@@ -147,41 +167,77 @@ class PoolingTest(unittest.TestCase):
 
 
 class CheckInTest(unittest.TestCase):
-    def test_plan_lists_unreported_days_for_associated_concepts(self):
+    def plan(self, facts=None, today=D(24)):
+        facts = facts or swelling_facts()
+        return {s['key']: s for s in check_in_plan(facts, find_associations(facts), today, window=5)['steps']}
+
+    def test_agenda_follows_the_agreed_order(self):
         facts = swelling_facts()
+        facts['reported_measurements'] = {'concept:body_weight': {'label': 'Body weight', 'unit': '[lb_av]', 'dates': {D(22)}, 'last': D(22)}}
+        facts['last_reported'] = D(22)
         plan = check_in_plan(facts, find_associations(facts), D(24), window=5)
-        items = {p['concept']: p for p in plan}
-        self.assertEqual(items['concept:symptom:swelling']['unreported_days'], ['2026-10-24', '2026-10-23'])
-        self.assertEqual(items['concept:exposure:alcohol']['reported_days'], 3)
-        self.assertIn('Record "none" too', items['concept:symptom:swelling']['ask'])
+        self.assertEqual([s['key'] for s in plan['steps']],
+                         ['opening', 'urgent', 'open', 'measurements', 'sleep', 'workout', 'medications', 'exposures', 'symptoms', 'missed_days', 'close'])
+        steps = {s['key']: s for s in plan['steps']}
+        self.assertIn('Thursday, October 22', steps['opening']['say'])
+        self.assertIn('since Thursday, October 22', steps['medications']['asks'][0])
+        self.assertIn('as-needed', steps['medications']['asks'][1])
+        self.assertEqual(steps['exposures']['items'][0]['concept'], 'concept:exposure:alcohol')
+        self.assertIn('Do you want to fill', steps['missed_days']['ask'])
+        self.assertEqual(steps['missed_days']['days'], ['2026-10-23'])
+
+    def test_a_symptom_present_last_time_asks_when_it_stopped(self):
+        facts = swelling_facts()
+        facts['observations'].append(observation('s23', 'concept:symptom:swelling', 'symptom', 23, 'present', label='Swelling'))
+        swelling = self.plan(facts)['symptoms']['items'][0]
+        self.assertEqual((swelling['last_state'], swelling['last_state_date']), ('present', '2026-10-23'))
+        self.assertIn('when it stopped', swelling['if_no'])
+        dry = self.plan()['symptoms']['items'][0]
+        self.assertEqual(dry['if_no'], 'Record it as absent today.')
 
     def test_active_symptoms_without_dated_reports_are_asked_about(self):
         facts = swelling_facts()
         facts['reports'] = [
             {'concept': 'concept:symptom:constipation', 'label': 'Constipation', 'kind': 'symptom', 'reported': D(1), 'assertion': 'present'},
-            {'concept': 'concept:symptom:bloating_trapped_gas', 'label': 'Bloating or trapped gas', 'kind': 'symptom', 'reported': D(1), 'assertion': 'present'},
+            {'concept': 'concept:key:symptom:very_dark_stool', 'label': 'very dark stool', 'kind': 'symptom', 'reported': D(11), 'assertion': 'present'},
             # Reported gone since, so no longer active.
             {'concept': 'concept:key:symptom:night_sweats', 'label': 'night sweats', 'kind': 'symptom', 'reported': D(5), 'assertion': 'present'},
             {'concept': 'concept:key:symptom:night_sweats', 'label': 'night sweats', 'kind': 'symptom', 'reported': D(9), 'assertion': 'absent'},
-            # Too long ago to be active.
+            # Too long ago, a single day, or lifelong: not active.
             {'concept': 'concept:key:symptom:dry_eyes', 'label': 'dry eyes', 'kind': 'symptom', 'reported': date(2026, 6, 1), 'assertion': 'present'},
-            # A one-off episode is not an ongoing symptom.
             {'concept': 'concept:key:symptom:post_cardio_sweating', 'label': 'post cardio sweating', 'kind': 'symptom', 'reported': D(20),
              'assertion': 'present', 'scope': 'current_state', 'dated': True},
             {'concept': 'concept:key:symptom:sock_marks', 'label': 'sock marks', 'kind': 'symptom', 'reported': D(20),
              'assertion': 'present', 'scope': 'lifelong_history'},
         ]
-        plan = check_in_plan(facts, find_associations(facts), D(24), window=5)
-        labels = [p['label'] for p in plan]
-        self.assertEqual(labels[:2], ['Swelling', 'Alcohol intake'])
-        self.assertIn('Constipation', labels)
-        self.assertIn('Bloating or trapped gas', labels)
-        self.assertNotIn('night sweats', labels)
-        self.assertNotIn('dry eyes', labels)
-        self.assertNotIn('post cardio sweating', labels)
-        self.assertNotIn('sock marks', labels)
-        constipation = next(p for p in plan if p['label'] == 'Constipation')
-        self.assertEqual((constipation['reasons'], constipation['reported_days']), (['active_symptom'], 0))
+        plan = self.plan(facts)
+        items = {i['label']: i for i in plan['symptoms']['items']}
+        self.assertEqual(list(items)[0], 'Swelling')
+        self.assertEqual(set(items), {'Swelling', 'Constipation', 'very dark stool'})
+        self.assertTrue(items['Constipation']['bristol'])
+        self.assertIn('Bristol', items['Constipation']['if_yes'])
+        self.assertFalse(items['Swelling']['bristol'])
+        # A reported red-flag symptom joins the urgent screen.
+        self.assertTrue(any(i.startswith('very dark stool') for i in plan['urgent']['items']))
+
+    def test_a_symptom_reported_at_the_last_check_in_is_asked_again(self):
+        facts = swelling_facts()
+        facts['last_reported'] = D(23)
+        facts['reports'] = [{'concept': 'concept:key:symptom:headache', 'label': 'headache', 'kind': 'symptom', 'reported': D(23),
+                             'assertion': 'present', 'scope': 'dated_episode', 'dated': True}]
+        facts['observations'].append(observation('h23', 'concept:key:symptom:headache', 'symptom', 23, 'present', label='headache'))
+        items = {i['label']: i for i in self.plan(facts)['symptoms']['items']}
+        self.assertIn('headache', items)
+        self.assertIn('when it stopped', items['headache']['if_no'])
+
+    def test_measurements_and_drinks_are_asked_only_when_tracked(self):
+        facts = swelling_facts()
+        facts['observations'] = [o for o in facts['observations'] if o['kind'] == 'symptom']
+        plan = self.plan(facts)
+        self.assertNotIn('measurements', plan)
+        self.assertNotIn('exposures', plan)
+        self.assertIn('sleep', plan)
+        self.assertIn('workout', plan)
 
     def test_fisher(self):
         self.assertAlmostEqual(fisher_greater(5, 0, 0, 3), 1 / 56)

@@ -452,7 +452,7 @@ def import_symptoms(imp):
         native=r['record_id'];kind=r['record_type'];d=r['details']
         rid,vh=imp.record('patient_symptoms',kind,native,r,path)
         label=d.get('label') or d.get('medication_name') or d.get('source_text') or r['record_key']
-        assertion=d.get('assertion') or ('hypothesis' if kind=='patient_hypothesis' else 'reported')
+        assertion=d.get('assertion') or ('hypothesis' if kind=='patient_hypothesis' else 'absent' if d.get('status')=='none_reported' else 'reported')
         quotes='\n'.join(x['quote'] for x in r['provenance']['evidence'])
         occurrence=d.get('occurrence',{}).get('date')
         # Sleep is a nightly measurement in hours; a report with only quality has no value.
