@@ -271,6 +271,34 @@
       "note": "Generalized or limb swelling. Lip, tongue, throat, facial, joint and abdominal swelling are distinct symptoms with their own concepts."
     },
     {
+      "concept": "symptom:constipation",
+      "label": "Constipation",
+      "clinical_type": "symptom",
+      "codings": [],
+      "match": {
+        "key_patterns": [
+          "constipat"
+        ]
+      },
+      "note": "Hard, infrequent or incomplete bowel movements. Straining, ribbon-shaped stool and difficulty emptying keep their own keys."
+    },
+    {
+      "concept": "symptom:bloating_trapped_gas",
+      "label": "Bloating or trapped gas",
+      "clinical_type": "symptom",
+      "codings": [],
+      "match": {
+        "key_patterns": [
+          "bloat",
+          "trapped_gas",
+          "difficulty_passing_gas",
+          "abdominal_distension",
+          "(^|_)gas(_|$)"
+        ]
+      },
+      "note": "Abdominal bloating, trapped gas or difficulty passing gas. A visibly swollen abdomen is a separate sign."
+    },
+    {
       "concept": "exposure:alcohol",
       "label": "Alcohol intake",
       "clinical_type": "exposure",

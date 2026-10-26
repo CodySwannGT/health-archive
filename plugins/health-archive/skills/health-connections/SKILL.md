@@ -34,8 +34,8 @@ Drawing connections is the archive's purpose. Being careful about what is known 
 
 ## Daily check-in
 
-1. Call `check_in`. It lists the symptoms and exposures in open associations, and the recent days with no report.
-2. Ask about each briefly, including how much for an exposure. Ask about missed days only if the user can recall them.
+1. Call `check_in`. It lists the symptoms and exposures in open associations, then active symptoms (reported as ongoing in the last 60 days and not reported gone since), with the recent days that have no report. Active symptoms often have no dated reports yet; asking daily is what lets the engine connect them to anything.
+2. Ask about each briefly, as one short list, including how much for an exposure. Ask about missed days only if the user can recall them. If a symptom could need prompt care, such as black or tarry stool, say so before anything else.
 3. Record every answer with `record_narrative`, including absences ("no swelling today", "no alcohol") as records with assertion `absent`. An unreported day is unknown, not symptom-free.
 4. Read the records back, then call `associations` again and tell the user what changed.
 
