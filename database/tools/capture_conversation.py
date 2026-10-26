@@ -67,6 +67,15 @@ def _connector_items(event):
     return [(event['role'],'message',event['text'],[{'type':'text','text':event['text']}],event.get('message_ref'))]
 
 
+def _same_connector_message(stored, row):
+    """Whether a stored connector message differs only by the absolute workspace path earlier captures recorded."""
+    path=stored['provenance'].get('original_session_path','')
+    if not path.endswith('/'+row['provenance']['original_session_path']):
+        return False
+    rest=lambda r:{**r,'content_sha256':None,'provenance':{**r['provenance'],'original_session_path':None}}
+    return rest(stored)==rest(row)
+
+
 def append_connector_messages(archive_root, session_id, client, messages, received_at):
     """Append messages a connected client submits to an append-only source session file.
 
@@ -152,6 +161,9 @@ def capture(session, excluded_ranges=(), archive_root=None):
         meta={'id':first['sessionId'],'cwd':first['cwd'],'timestamp':first['timestamp']} if first else None
     if not meta or (not connector and Path(meta.get('cwd','')).resolve() not in _session_workspaces()):
         raise ValueError('Only a session explicitly owned by this health workspace can be captured')
+    # Connector sources live in the archive, which is materialized in a fresh
+    # directory for every write, so their path is recorded relative to it.
+    session_path=str(session.relative_to(archive_root.resolve())) if connector else str(session)
     sid=meta['id']
     if not sid or any(c not in '0123456789abcdef-' for c in sid.lower()):
         raise ValueError('Invalid session identifier')
@@ -210,9 +222,9 @@ def capture(session, excluded_ranges=(), archive_root=None):
                            'source_event_sha256':hashlib.sha256(line).hexdigest(),
                            'text_path':str(text_path.relative_to(archive_root)),
                            'text_sha256':hashlib.sha256(text.encode()).hexdigest(),
-                           'original_session_path':str(session),'original_line_number':line_no}}
+                           'original_session_path':session_path,'original_line_number':line_no}}
         row['content_sha256']=digest(row)
-        if native in records and records[native]!=row:
+        if native in records and records[native]!=row and not _same_connector_message(records[native],row):
             raise ValueError('Conflicting conversation message requires review: '+native)
         if native not in records:
             records[native]=row;new+=1

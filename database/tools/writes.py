@@ -89,9 +89,16 @@ def record_medication(source, row_path, report, dry_run=False):
     `evidence_quotes`. Quotes are located in the source and the hash is computed.
     """
     from jsonschema import Draft202012Validator, FormatChecker
+    from jsonschema.exceptions import best_match
     row = json.loads(Path(row_path).read_text())
     quotes = row.pop('evidence_quotes')
+    if row.get('record_type') not in MEDICATION_FILES:
+        raise ValueError(f'record_type must be one of {sorted(MEDICATION_FILES)}')
     filename, key = MEDICATION_FILES[row['record_type']]
+    # Administrations carry reported_at as a field; regimens and changes keep it only in provenance.
+    reported_at = row.get('reported_at') if row['record_type'] == 'medication_administration' else row.pop('reported_at', None)
+    if not reported_at:
+        raise ValueError('reported_at is required: the ISO 8601 time, with offset, when the patient reported this')
     def apply(workspace):
         source_rel = f'meds/patient-reports/{report}/source.txt'
         _place(source, workspace / source_rel)
@@ -102,11 +109,15 @@ def record_medication(source, row_path, report, dry_run=False):
             if start < 0 or text.find(quote, start + 1) >= 0:
                 raise ValueError('Evidence quote must occur exactly once in the source: ' + quote)
             evidence.append({'end_char': start + len(quote), 'quote': quote, 'start_char': start})
-        record = {**row, 'provenance': {'evidence': evidence, 'reported_at': row['reported_at'], 'source_path': source_rel,
+        record = {**row, 'provenance': {'evidence': evidence, 'reported_at': reported_at, 'source_path': source_rel,
                                         'source_sha256': hashlib.sha256(text.encode()).hexdigest()}}
         record['content_sha256'] = _semantic_hash()(record)
         schema = json.loads((workspace / 'meds/medication.schema.json').read_text())
-        Draft202012Validator(schema, format_checker=FormatChecker()).validate(record)
+        # Validate against the record type's own branch so the error names the failing field, not just the oneOf.
+        branch = {**schema, 'oneOf': [{'$ref': f"#/$defs/{record['record_type']}"}]}
+        error = best_match(Draft202012Validator(branch, format_checker=FormatChecker()).iter_errors(record))
+        if error:
+            raise error
         target = workspace / filename
         rows = [json.loads(line) for line in target.read_text().splitlines() if line.strip()] if target.exists() else []
         prior = next((r for r in rows if r[key] == record[key]), None)

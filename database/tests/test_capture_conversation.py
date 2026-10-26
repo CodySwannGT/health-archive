@@ -117,6 +117,25 @@ class ConversationCaptureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'hexadecimal'):
             capture.append_connector_messages(self.root,'../escape','x',messages,'2026-10-24T12:00:00Z')
 
+    def test_connector_capture_repeats_in_a_fresh_workspace(self):
+        sid='abcdef01-0000-0000-0000-000000000002'
+        first=[{'role':'user','text':'Weight 243 yesterday','timestamp':'2026-10-25T15:25:58Z'}]
+        path,_=capture.append_connector_messages(self.root,sid,'codex',first,'2026-10-25T15:26:00Z')
+        capture.capture(path,archive_root=self.root)
+        stored=(self.root/'conversations/messages.jsonl').read_text()
+        self.assertEqual(json.loads(stored)['provenance']['original_session_path'],f'conversations/connector-sessions/{sid}.jsonl')
+        # Every write materializes the archive in a new directory, and earlier captures recorded its absolute path.
+        legacy=json.loads(stored);legacy['provenance']['original_session_path']='/tmp/health-workspace-old/'+legacy['provenance']['original_session_path']
+        legacy['content_sha256']=capture.digest({k:v for k,v in legacy.items() if k!='content_sha256'})
+        moved=Path(self.tmp.name)/'fresh';moved.mkdir()
+        import shutil;shutil.copytree(self.root/'conversations',moved/'conversations')
+        (moved/'conversations/messages.jsonl').write_text(capture.canonical(legacy)+'\n')
+        path,_=capture.append_connector_messages(moved,sid,'codex',first+[{'role':'user','text':'Restarted Thursday','timestamp':'2026-10-25T15:30:00Z'}],'2026-10-25T15:31:00Z')
+        self.assertEqual(capture.capture(path,archive_root=moved)['new_messages'],1)
+        rows=[json.loads(l) for l in (moved/'conversations/messages.jsonl').read_text().splitlines()]
+        self.assertEqual(rows[0],legacy)
+        self.assertEqual(rows[1]['provenance']['original_session_path'],f'conversations/connector-sessions/{sid}.jsonl')
+
     def test_privacy_gap_persists_without_changing_source_identity(self):
         for ordinal,second,text in [(1,1,'Before gap'),(2,2,'Do not retain this'),(3,3,'Resume recording')]:
             event=self.message(ordinal,'user',text)
