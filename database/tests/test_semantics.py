@@ -4,7 +4,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from semantics import Registry, assign_concepts, normalize
+from semantics import Registry, assign_concepts, medication_names, normalize
 
 ONTOLOGY = Path(__file__).resolve().parents[2] / 'template' / 'ontology'
 LOINC = 'http://loinc.org'
@@ -105,6 +105,31 @@ class ConceptTest(unittest.TestCase):
         self.assertEqual(assigned['drinks'][0], 'concept:exposure:alcohol')
         self.assertEqual(assigned['none'][0], 'concept:exposure:alcohol')
         self.assertEqual(concepts['concept:key:symptom:night_sweats']['basis'], 'source_key')
+
+    def test_medication_generic_and_brands(self):
+        load = lambda name, key: json.loads((ONTOLOGY / name).read_text())[key]
+        curated = {'concept': 'medication:linaclotide', 'label': 'Linaclotide (Linzess)', 'clinical_type': 'medication_use', 'family': 'medication',
+                   'codings': [], 'generic': 'linaclotide', 'brands': ['linzess', 'constella'],
+                   'match': {'name_patterns': [r'^linzess\b', r'\blinaclotide\b']}}
+        registry = Registry(load('categories.json', 'categories'), load('relations.json', 'relations'),
+                            load('clinical-types.json', 'clinical_types'), [curated])
+        concepts, assigned = assign_concepts(registry, {
+            'reported': ('medication_regimen', 'Linzess (linaclotide)', None, None, 'reported', None),
+            'clinic': ('medications', 'linaclotide 145 mcg capsule', None, None, 'source_record', None),
+            'bystolic': ('medications', 'nebivolol (BYSTOLIC) 2.5 mg tablet', None, None, 'source_record', None),
+        })
+        self.assertEqual(assigned['reported'][0], assigned['clinic'][0])
+        linaclotide = concepts['concept:medication:linaclotide']
+        # Only brands a record names count; constella is listed but never used.
+        self.assertEqual((linaclotide['generic'], linaclotide['brands']), ('linaclotide', ['linzess']))
+        nebivolol = concepts[assigned['bystolic'][0]]
+        self.assertEqual((nebivolol['generic'], nebivolol['brands']), ('nebivolol', ['bystolic']))
+        self.assertEqual(medication_names('chorionic gonadotropin, human (PREGNYL INTRAMUSC.)'), ('chorionic gonadotropin human', 'pregnyl'))
+        self.assertEqual(medication_names('lidocaine (PF) 10 mg/mL (1 %) 9 mL injection'), ('lidocaine', None))
+        self.assertEqual(medication_names('Linzess (linaclotide)'), (None, None))
+        with self.assertRaises(ValueError):
+            Registry(load('categories.json', 'categories'), load('relations.json', 'relations'),
+                     load('clinical-types.json', 'clinical_types'), [{**curated, 'brands': ['Linzess']}])
 
 
 class EdgeRuleTest(unittest.TestCase):

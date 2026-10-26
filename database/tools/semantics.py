@@ -44,6 +44,9 @@ class Registry:
         for c in self.concepts:
             if c['clinical_type'] not in self.types:
                 problems.append(f"concept {c['concept']}: unknown clinical type {c['clinical_type']}")
+            names = ([c['generic']] if 'generic' in c else []) + c.get('brands', [])
+            if any(not isinstance(n, str) or n != n.casefold().strip() or not n for n in names):
+                problems.append(f"concept {c['concept']}: generic and brand names are lowercase strings")
         if problems:
             raise ValueError('Invalid ontology registry: ' + '; '.join(problems))
 
@@ -149,6 +152,29 @@ def normalize(name):
     return ' '.join(str(name or '').casefold().replace(' ', ' ').split()).strip(' .,:;')
 
 
+# Parenthesized upper-case words that qualify a product rather than name a brand.
+QUALIFIERS = {'pf', 'er', 'xr', 'sr', 'dr', 'ir', 'la', 'cr', 'odt', 'hcl', 'otc', 'usp'}
+
+
+def medication_names(name):
+    """The (generic, brand) a medication name states, or None for either.
+
+    Clinical medication lists write a product as generic (BRAND) strength form,
+    such as "nebivolol (BYSTOLIC) 2.5 mg tablet". Only that convention, an
+    upper-case parenthesized word after a name that is not upper case, is read.
+    Anything else, such as "Linzess (linaclotide)", is ambiguous without a
+    curated concept, so neither name is guessed."""
+    match = re.match(r'^\s*([^()]+?)\s*\(([^()]+)\)', name or '')
+    if not match:
+        return None, None
+    outside, inside = match.group(1).strip(), match.group(2).strip()
+    if not inside.isupper() or outside.isupper():
+        return None, None
+    brand = inside.split()[0].strip('.,').casefold()
+    generic = ' '.join(re.sub(r'[^a-z0-9 -]', ' ', outside.casefold()).split())
+    return generic or None, (brand if brand not in QUALIFIERS else None)
+
+
 def code_key(system, code):
     return f'{system}|{code}' if system and code else None
 
@@ -174,7 +200,9 @@ def assign_concepts(registry, resources):
             c = registry.concepts[index]
             cid = 'concept:' + c['concept']
             concepts.setdefault(cid, {'concept_id': cid, 'label': c['label'], 'clinical_type': c['clinical_type'], 'basis': 'curated_registry',
-                                      'family': registry.concept_family(c), 'codings': list(c['codings']), 'note': c.get('note')})
+                                      'family': registry.concept_family(c), 'codings': list(c['codings']), 'note': c.get('note'),
+                                      'generic': c.get('generic') or (c['concept'].split(':', 1)[1] if c['concept'].startswith('medication:') else None),
+                                      'known_brands': c.get('brands', [])})
             assigned[rid] = (cid, basis)
         elif concept_eligible(registry, category, name, assertion, key):
             pending[rid] = (family, normalized, code_key(system, code), key)
@@ -220,7 +248,16 @@ def assign_concepts(registry, resources):
         label = sorted(names.items(), key=lambda item: (-item[1], item[0]))[0][0]
         concepts[cid] = {'concept_id': cid, 'label': label, 'clinical_type': clinical_type, 'family': registry.family(clinical_type),
                          'basis': 'source_code' if cid.startswith('concept:code:') else 'source_key' if cid.startswith('concept:key:') else 'source_name',
-                         'codings': [c for _, c in sorted(codings.items())], 'note': None}
+                         'codings': [c for _, c in sorted(codings.items())], 'note': None, 'generic': None}
+    # A medication's generic name, curated or stated by its records, and the brands its records name.
+    for cid, c in concepts.items():
+        member_names = [resources[rid][1] for rid in members.get(cid, [])]
+        stated = [medication_names(n) for n in member_names] if c['family'] == 'medication' else []
+        generics = sorted({g for g, _ in stated if g})
+        c['generic'] = c.get('generic') or (generics[0] if len(generics) == 1 else None)
+        seen = {b for _, b in stated if b}
+        seen |= {b for b in c.pop('known_brands', []) if any(re.search(rf'\b{re.escape(b)}\b', n.casefold()) for n in member_names)}
+        c['brands'] = sorted(seen)
     result = {}
     for rid in resources:
         cid, basis = assigned.get(rid, (None, None))

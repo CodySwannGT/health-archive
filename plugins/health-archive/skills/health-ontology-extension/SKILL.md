@@ -32,7 +32,7 @@ This requires a local checkout with database credentials.
    - add an optional field, enum value or new `oneOf` branch;
    - register any new category in `ontology/categories.json` with its clinical type, and any new relation in `ontology/relations.json` with its domain and range;
    - prefer a qualifier on an existing relation over a new relation that only names a target type;
-   - add a curated concept to `ontology/concepts.json` when records from different sources measure the same thing under different names;
+   - add a curated concept to `ontology/concepts.json` when records from different sources measure the same thing under different names. A medication concept states its lowercase `generic` name and the `brands` its records may use, such as `{"concept": "medication:linaclotide", "generic": "linaclotide", "brands": ["linzess"]}` with `name_patterns` for both;
    - update the projection code when the new type needs a typed column, a numeric value, or a new graph relation.
 3. Add or extend unit tests in `database/tests/`, and run them.
 4. Store the changed definitions with `healthdb put symptoms/symptom.schema.json ontology/categories.json ...`. `put` refuses stale versions and record-dropping rewrites.

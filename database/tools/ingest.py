@@ -690,10 +690,10 @@ def project_semantics(imp):
         imp.relationship('ontology:'+c['category'],'type:'+c['clinical_type'],'DEFAULT_CLINICAL_TYPE','ontology',{})
     members=collections.Counter(cid for cid,_,_ in assigned.values() if cid)
     with conn.cursor() as cur:
-        cur.executemany('''INSERT INTO health.concepts(patient_id,concept_id,label,family,clinical_type,basis,codings,note,member_count,updated_run) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        cur.executemany('''INSERT INTO health.concepts(patient_id,concept_id,label,family,clinical_type,basis,codings,note,member_count,updated_run,generic_name,brand_names) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
           ON CONFLICT (patient_id,concept_id) DO UPDATE SET label=EXCLUDED.label,family=EXCLUDED.family,clinical_type=EXCLUDED.clinical_type,basis=EXCLUDED.basis,
-          codings=EXCLUDED.codings,note=EXCLUDED.note,member_count=EXCLUDED.member_count,updated_run=EXCLUDED.updated_run''',
-          [(patient,c['concept_id'],c['label'],c['family'],c['clinical_type'],c['basis'],Jsonb(c['codings']),c['note'],members[c['concept_id']],imp.run) for c in concepts.values()])
+          codings=EXCLUDED.codings,note=EXCLUDED.note,member_count=EXCLUDED.member_count,updated_run=EXCLUDED.updated_run,generic_name=EXCLUDED.generic_name,brand_names=EXCLUDED.brand_names''',
+          [(patient,c['concept_id'],c['label'],c['family'],c['clinical_type'],c['basis'],Jsonb(c['codings']),c['note'],members[c['concept_id']],imp.run,c['generic'],c['brands']) for c in concepts.values()])
         cur.executemany('''UPDATE health.resources SET clinical_type=%s,concept_id=%s,concept_basis=%s
           WHERE resource_id=%s AND (clinical_type,concept_id,concept_basis) IS DISTINCT FROM (%s,%s,%s)''',
           [(t,cid,basis,rid,t,cid,basis) for rid,(cid,basis,t) in assigned.items()])
@@ -711,22 +711,22 @@ def project_semantics(imp):
 
 def project_associations(imp):
     """Compute this patient's associations, keep every version, and link associated concepts in the graph."""
-    from associations import find_associations, load_facts, pool_key
+    from associations import brand_keys, find_associations, load_facts, pool_key
     conn,patient=imp.conn,imp.patient
     facts=load_facts(conn,patient,imp.resource_ids)
     found=find_associations(facts)
     concepts=facts['concepts']
     medication_concepts={m['concept'] for m in facts['medications']}
     def pooled(cid):
-        basis,family,label=concepts.get(cid,(None,None,None))
-        return pool_key(cid,basis,'medication' if cid in medication_concepts else family,label)
+        basis,family,label,generic,_=concepts.get(cid,(None,None,None,None,()))
+        return pool_key(cid,basis,'medication' if cid in medication_concepts else family,label,generic)
     with conn.cursor() as cur:
         for a in found:
             version=digest(a)
             cur.execute('''INSERT INTO health.association_versions VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING''',(patient,a['association_id'],version,Jsonb(a),imp.run))
             cur.execute('''INSERT INTO health.associations(patient_id,association_id,method,exposure_concept,exposure_label,exposure_pool_key,outcome_concept,outcome_label,outcome_pool_key,
-              strength,direction,effect,statement,supporting_records,contrary_records,competing,limitations,version_sha256,first_seen_run,last_seen_run,is_current)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true) ON CONFLICT (patient_id,association_id) DO UPDATE SET
+              strength,direction,effect,statement,supporting_records,contrary_records,competing,limitations,version_sha256,first_seen_run,last_seen_run,is_current,exposure_brand_keys)
+              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true,%s) ON CONFLICT (patient_id,association_id) DO UPDATE SET exposure_brand_keys=EXCLUDED.exposure_brand_keys,
               method=EXCLUDED.method,exposure_concept=EXCLUDED.exposure_concept,exposure_label=EXCLUDED.exposure_label,exposure_pool_key=EXCLUDED.exposure_pool_key,
               outcome_concept=EXCLUDED.outcome_concept,outcome_label=EXCLUDED.outcome_label,outcome_pool_key=EXCLUDED.outcome_pool_key,strength=EXCLUDED.strength,
               direction=EXCLUDED.direction,effect=EXCLUDED.effect,statement=EXCLUDED.statement,supporting_records=EXCLUDED.supporting_records,
@@ -734,7 +734,7 @@ def project_associations(imp):
               last_seen_run=EXCLUDED.last_seen_run,is_current=true''',
               (patient,a['association_id'],a['method'],a['exposure_concept'],a['exposure_label'],pooled(a['exposure_concept']),a['outcome_concept'],a['outcome_label'],
                pooled(a['outcome_concept']),a['strength'],a['direction'],Jsonb(a['effect']),a['statement'],a['supporting_records'],a['contrary_records'],
-               Jsonb(a['competing']),Jsonb(a['limitations']),version,imp.run,imp.run))
+               Jsonb(a['competing']),Jsonb(a['limitations']),version,imp.run,imp.run,brand_keys(concepts[a['exposure_concept']][4] if a['exposure_concept'] in medication_concepts else ())))
     conn.execute('UPDATE health.associations SET is_current=(last_seen_run IS NOT DISTINCT FROM %s) WHERE patient_id=%s',(imp.run,patient))
     for a in found:
         if a['strength']!='insufficient' and a['exposure_concept'] in imp.concepts and a['outcome_concept'] in imp.concepts:
@@ -751,7 +751,7 @@ def refresh_pooled_patterns(conn):
     Only aggregates of at least MIN_CONTRIBUTORS distinct patients are stored."""
     from associations import pooled_patterns, MIN_CONTRIBUTORS
     conn.execute("SELECT pg_advisory_xact_lock(hashtext('health_pooled_patterns'))")
-    rows=conn.execute('''SELECT a.patient_id,a.method,a.exposure_pool_key,a.exposure_label,a.outcome_pool_key,a.outcome_label,a.direction,a.strength,a.effect
+    rows=conn.execute('''SELECT a.patient_id,a.method,a.exposure_pool_key,a.exposure_label,a.outcome_pool_key,a.outcome_label,a.direction,a.strength,a.effect,a.exposure_brand_keys
       FROM health.associations a JOIN health.pooling_consent c ON c.patient_id=a.patient_id AND c.opted_in WHERE a.is_current''').fetchall()
     patterns=pooled_patterns([tuple(r.values()) for r in rows],MIN_CONTRIBUTORS)
     conn.execute('DELETE FROM health.pooled_patterns')
@@ -849,7 +849,7 @@ def literal_list(items, literal):
 
 
 def migrate(conn):
-    for name in ('003_system_of_record.sql','004_multi_user.sql','005_source_history.sql','006_clinical_semantics.sql','007_connections.sql'):
+    for name in ('003_system_of_record.sql','004_multi_user.sql','005_source_history.sql','006_clinical_semantics.sql','007_connections.sql','008_medication_generics.sql'):
         conn.execute((DB/'sql'/name).read_text(),prepare=False)
 
 
