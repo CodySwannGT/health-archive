@@ -303,14 +303,16 @@ def build(auth_provider=None, issuer_url=None):
         return await _as_account(run)
 
     @server.tool(annotations=WRITE)
-    async def capture_conversation(session_id: str, client: str, messages: list[dict]) -> dict:
+    async def capture_conversation(session_id: str, client: str, messages: list[dict], project: bool = False) -> dict:
         """Preserve user-facing conversation turns in the audit archive. Repeat submissions are no-ops.
 
         `session_id` is a stable hexadecimal-and-hyphen ID for this conversation, such as a UUID. Each message has
-        role (user or assistant), text, an optional ISO timestamp and an optional stable message_ref."""
+        role (user or assistant), text, an optional ISO timestamp and an optional stable message_ref.
+        The messages are stored at once as the conversation's source. They become searchable archive messages at the
+        next record_narrative, record_medication or other write; pass project=true to do that now, which takes longer."""
         _require_write()
         import writes
-        return await _as_account(lambda: _jsonable(writes.capture_connector_messages(session_id.lower(), client, messages)))
+        return await _as_account(lambda: _jsonable(writes.capture_connector_messages(session_id.lower(), client, messages, project)))
 
     return server
 

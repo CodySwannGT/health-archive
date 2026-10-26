@@ -47,7 +47,7 @@ Scopes: `health.read` for queries, `health.write` for `record_narrative`, `recor
 | `associations`, `check_in` | Evidence-graded connections in the person's own records, and the morning check-in agenda |
 | `pooled_patterns`, `pooling`, `set_pooling` | Patterns shared by at least five opted-in people, and the person's opt-in. Aggregates only; never published |
 | `get_record`, `get_document`, `graph`, `ontology`, `status`, `query` | Records, documents, graph, ontology, status and bounded read-only SQL |
-| `record_narrative`, `record_medication`, `capture_conversation` | Writes. Each runs in one transaction against the database archive |
+| `record_narrative`, `record_medication`, `capture_conversation` | Writes. Each runs in one transaction against the database archive. `capture_conversation` stores messages as source in about a second; the next write, or `project: true`, makes them searchable records |
 
 ## Skills
 

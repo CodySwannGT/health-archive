@@ -158,6 +158,12 @@ def _verify(checkout):
                 assert message['clinical_assertion']=='not_extracted'
             assert len({m['message_id'] for m in messages})==len(messages)
             checks['conversation_messages_verified']=len(messages)
+            # Connector messages stored as source wait for the next write to become archive messages.
+            from capture_conversation import CONNECTOR_SESSIONS
+            pending=[p.stem for p in sorted((ROOT/CONNECTOR_SESSIONS).glob('*.jsonl'))
+                     if not (ROOT/'conversations/sessions'/p.stem/'checkpoint.json').exists()
+                     or json.loads((ROOT/'conversations/sessions'/p.stem/'checkpoint.json').read_text())['source_complete_bytes']!=p.stat().st_size]
+            checks['connector_sessions_awaiting_capture']=pending
             checks['assistant_messages_remain_nonclinical_audit_context']=True
         clinic_versions=0
         for p in (ROOT/'health-records/cleveland-clinic/versions').glob('*.json'):

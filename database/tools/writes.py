@@ -137,15 +137,55 @@ def capture_conversation(session, excluded_ranges=()):
     return _write(apply, 'capture-conversation')
 
 
-def capture_connector_messages(session_id, client, messages):
-    """Capture messages submitted by an authenticated connector client."""
+def capture_connector_messages(session_id, client, messages, project=False):
+    """Capture messages submitted by an authenticated connector client.
+
+    By default the messages are stored only as the session's source file, in one
+    short transaction. The next write of any kind captures them into archive
+    messages and reprojects; `project=True` does that now.
+    """
     from datetime import datetime, timezone
     import capture_conversation as capture
     received_at = datetime.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
-    def apply(workspace):
-        path, appended = capture.append_connector_messages(workspace, session_id, client, messages, received_at)
-        return {**capture.capture(path, archive_root=workspace), 'appended_source_messages': appended}
-    return _write(apply, 'capture-connector-messages')
+    if project:
+        def apply(workspace):
+            path, appended = capture.append_connector_messages(workspace, session_id, client, messages, received_at)
+            return {**capture.capture(path, archive_root=workspace), 'appended_source_messages': appended}
+        return _write(apply, 'capture-connector-messages')
+    return _append_connector_source(session_id, client, messages, received_at)
+
+
+def _append_connector_source(session_id, client, messages, received_at):
+    import tempfile
+    import ingest as pipeline
+    from capture_conversation import CONNECTOR_SESSIONS, append_connector_messages
+    from common import PARSER, Jsonb, connect, digest
+    from workspace import check_put, materialize
+    patient = current_account().patient_id
+    rel = f'{CONNECTOR_SESSIONS}/{session_id}.jsonl'
+    with connect(admin=True) as conn, tempfile.TemporaryDirectory(prefix='health-workspace-') as tmp:
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext('health_archive_ingest:'||%s))", (patient,))
+        workspace = Path(tmp)
+        current = conn.execute('SELECT sha256 FROM health.artifacts WHERE patient_id=%s AND path=%s AND retired_run IS NULL', (patient, rel)).fetchone()
+        if current:
+            materialize(conn, workspace, {rel: current['sha256']})
+        path, appended = append_connector_messages(workspace, session_id, client, messages, received_at)
+        result = {'session_id': session_id, 'appended_source_messages': appended, 'projected': False,
+                  'note': 'Stored as source. The next recorded write, or a capture with project=true, makes these messages searchable records.'}
+        if not appended:
+            return result
+        check_put(conn, rel, path.read_bytes(), current and current['sha256'])
+        run = conn.execute('INSERT INTO health.ingestion_runs(parser_version,manifest_sha256,operation,patient_id) VALUES (%s,%s,%s,%s) RETURNING run_id',
+                           (PARSER, digest([rel, hashlib.sha256(path.read_bytes()).hexdigest()]), 'append-connector-source', patient)).fetchone()['run_id']
+        checkout, pipeline.ROOT = pipeline.ROOT, workspace
+        try:
+            imp = pipeline.Importer(conn, run)
+            imp.artifact(path)
+        finally:
+            pipeline.ROOT = checkout
+        summary = {**imp.stats, 'deferred_projection': True}
+        conn.execute('UPDATE health.ingestion_runs SET completed_at=now(),summary=%s WHERE run_id=%s', (Jsonb(summary), run))
+    return {**result, 'run_id': run}
 
 
 def set_pooling_consent(opt_in):
