@@ -96,7 +96,7 @@ class Importer:
         self.observation_occurrences = collections.Counter()
         self.categories = {}
         self.relations = set()
-        # Per projected resource: (category, name, code system, code, assertion), for concepts.
+        # Per projected resource: (category, name, code system, code, assertion, structured key), for concepts.
         self.meta = {}
         self.doc_ids = set()
         self.edges = []
@@ -162,7 +162,7 @@ class Importer:
     def resource(self, rid, name, rtype='Basic', category='other', clinical=None, date_role='unspecified',
                  recorded=None, assertion='reported', evidence='source_record', status=None,
                  value=None, unit=None, reference=None, flag=None, code_system=None, code=None,
-                 details=None, provenance=None, numeric=None, value_range=None):
+                 details=None, provenance=None, numeric=None, value_range=None, key=None):
         if value_range is not None:
             if (rtype != 'Observation' or value is not None or numeric is not None
                     or not 0 <= value_range['minimum'] <= value_range['maximum'] <= 100
@@ -222,7 +222,7 @@ class Importer:
         self.stats['new_resource_versions'] += self.conn.execute('INSERT INTO health.resource_versions VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING', (rid,projection,Jsonb(normalized),Jsonb(prov),self.run)).rowcount
         self.resource_ids.add(rid)
         self.categories[rid]=category
-        self.meta[rid]=(category,name,code_system,code,assertion)
+        self.meta[rid]=(category,name,code_system,code,assertion,key)
         # Patient ownership is each row's patient_id; no per-record patient edge.
         self.relationship(rid,'ontology:'+category,'INSTANCE_OF','ontology',{})
 
@@ -462,7 +462,7 @@ def import_symptoms(imp):
                      value=d['value'] if measurement else None if composition else d.get('current_presence') or assertion,
                      numeric=d['value'] if measurement else None,unit=d['unit'] if measurement or composition else None,
                      value_range=d['value_range'] if composition else None,
-                     details=r,provenance=r['provenance'])
+                     details=r,provenance=r['provenance'],key=d.get('symptom_key') or d.get('exposure_key'))
         if native in superseded:
             imp.resource_ids.discard(rid)
         imp.document(native,'patient_symptoms',label,path,label+'\n'+quotes+'\n'+canonical(d),evidence='patient_hypothesis' if kind=='patient_hypothesis' else 'patient_report',rid=rid,provenance=r['provenance'],current=native not in superseded)
@@ -709,6 +709,59 @@ def project_semantics(imp):
     imp.stats['records_with_concepts']=sum(1 for cid,_,_ in assigned.values() if cid)
 
 
+def project_associations(imp):
+    """Compute this patient's associations, keep every version, and link associated concepts in the graph."""
+    from associations import find_associations, load_facts, pool_key
+    conn,patient=imp.conn,imp.patient
+    facts=load_facts(conn,patient,imp.resource_ids)
+    found=find_associations(facts)
+    concepts=facts['concepts']
+    medication_concepts={m['concept'] for m in facts['medications']}
+    def pooled(cid):
+        basis,family,label=concepts.get(cid,(None,None,None))
+        return pool_key(cid,basis,'medication' if cid in medication_concepts else family,label)
+    with conn.cursor() as cur:
+        for a in found:
+            version=digest(a)
+            cur.execute('''INSERT INTO health.association_versions VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING''',(patient,a['association_id'],version,Jsonb(a),imp.run))
+            cur.execute('''INSERT INTO health.associations(patient_id,association_id,method,exposure_concept,exposure_label,exposure_pool_key,outcome_concept,outcome_label,outcome_pool_key,
+              strength,direction,effect,statement,supporting_records,contrary_records,competing,limitations,version_sha256,first_seen_run,last_seen_run,is_current)
+              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true) ON CONFLICT (patient_id,association_id) DO UPDATE SET
+              method=EXCLUDED.method,exposure_concept=EXCLUDED.exposure_concept,exposure_label=EXCLUDED.exposure_label,exposure_pool_key=EXCLUDED.exposure_pool_key,
+              outcome_concept=EXCLUDED.outcome_concept,outcome_label=EXCLUDED.outcome_label,outcome_pool_key=EXCLUDED.outcome_pool_key,strength=EXCLUDED.strength,
+              direction=EXCLUDED.direction,effect=EXCLUDED.effect,statement=EXCLUDED.statement,supporting_records=EXCLUDED.supporting_records,
+              contrary_records=EXCLUDED.contrary_records,competing=EXCLUDED.competing,limitations=EXCLUDED.limitations,version_sha256=EXCLUDED.version_sha256,
+              last_seen_run=EXCLUDED.last_seen_run,is_current=true''',
+              (patient,a['association_id'],a['method'],a['exposure_concept'],a['exposure_label'],pooled(a['exposure_concept']),a['outcome_concept'],a['outcome_label'],
+               pooled(a['outcome_concept']),a['strength'],a['direction'],Jsonb(a['effect']),a['statement'],a['supporting_records'],a['contrary_records'],
+               Jsonb(a['competing']),Jsonb(a['limitations']),version,imp.run,imp.run))
+    conn.execute('UPDATE health.associations SET is_current=(last_seen_run IS NOT DISTINCT FROM %s) WHERE patient_id=%s',(imp.run,patient))
+    for a in found:
+        if a['strength']!='insufficient' and a['exposure_concept'] in imp.concepts and a['outcome_concept'] in imp.concepts:
+            imp.relationship(a['exposure_concept'],a['outcome_concept'],'DERIVED_ASSOCIATION','derived_association',{'association_id':a['association_id']},
+                             {'method':a['method'],'strength':a['strength']})
+    imp.stats['associations']=len(found)
+    imp.stats['associations_moderate_or_strong']=sum(a['strength'] in ('moderate','strong') for a in found)
+
+
+def refresh_pooled_patterns(conn):
+    """Recompute pooled patterns from every opted-in patient's current associations.
+
+    Revoked or never-given consent removes a patient's contribution at the next refresh.
+    Only aggregates of at least MIN_CONTRIBUTORS distinct patients are stored."""
+    from associations import pooled_patterns, MIN_CONTRIBUTORS
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext('health_pooled_patterns'))")
+    rows=conn.execute('''SELECT a.patient_id,a.method,a.exposure_pool_key,a.exposure_label,a.outcome_pool_key,a.outcome_label,a.direction,a.strength,a.effect
+      FROM health.associations a JOIN health.pooling_consent c ON c.patient_id=a.patient_id AND c.opted_in WHERE a.is_current''').fetchall()
+    patterns=pooled_patterns([tuple(r.values()) for r in rows],MIN_CONTRIBUTORS)
+    conn.execute('DELETE FROM health.pooled_patterns')
+    with conn.cursor() as cur:
+        cur.executemany('''INSERT INTO health.pooled_patterns(pattern_id,method,exposure_key,exposure_label,outcome_key,outcome_label,direction,contributors,share_moderate_or_strong,median_effect)
+          VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',[(p['pattern_id'],p['method'],p['exposure_key'],p['exposure_label'],p['outcome_key'],p['outcome_label'],p['direction'],
+          p['contributors'],p['share_moderate_or_strong'],Jsonb(p['median_effect']) if p['median_effect'] else None) for p in patterns])
+    return len(patterns)
+
+
 def edge_endpoint(imp):
     def endpoint(node):
         if node in imp.categories:return ('@Resource',imp.categories[node],imp.clinical_types[node])
@@ -796,7 +849,7 @@ def literal_list(items, literal):
 
 
 def migrate(conn):
-    for name in ('003_system_of_record.sql','004_multi_user.sql','005_source_history.sql','006_clinical_semantics.sql'):
+    for name in ('003_system_of_record.sql','004_multi_user.sql','005_source_history.sql','006_clinical_semantics.sql','007_connections.sql'):
         conn.execute((DB/'sql'/name).read_text(),prepare=False)
 
 
@@ -876,6 +929,7 @@ def _project(conn,workspace,operation,changed):
         for importer in (import_labcorp,import_quest,import_medications,import_symptoms,import_vitals,import_clinic,import_conversations,import_research):
             importer(imp); print(importer.__name__+' queued',flush=True)
         project_semantics(imp)
+        project_associations(imp)
         enforce_ontology(imp)
         # The workspace is the database's complete current archive, so a
         # projection absent from it was removed by an explicit database change.
@@ -886,6 +940,7 @@ def _project(conn,workspace,operation,changed):
     # actual committed-in-transaction insert deltas instead of pending -1s.
     after=version_counts()
     for key in before: imp.stats[key]=after[key]-before[key]
+    imp.stats['pooled_patterns']=refresh_pooled_patterns(conn)
     sync_graph(imp)
     sync_embeddings(imp)
     conn.execute('UPDATE health.ingestion_runs SET completed_at=now(),summary=%s WHERE run_id=%s',(Jsonb(dict(imp.stats)),run))

@@ -29,7 +29,10 @@ Query before answering health questions, and cite source dates and record IDs.
 Patient reports, clinical findings, family history, patient hypotheses and agent research are distinct.
 Reported associations never establish causation. Assistant advice is never a completed action.
 Record new patient statements with record_narrative or record_medication only after reviewing exact quotes,
-then read the facts back before saying they were saved. Capture user-facing conversation turns with capture_conversation.'''
+then read the facts back before saying they were saved. Capture user-facing conversation turns with capture_conversation.
+Drawing connections is the purpose: use associations for evidence-graded patterns in the person's own records, with
+competing explanations and pooled context, and say how strong each is. An association is never a cause or a diagnosis.
+Use check_in to ask about symptom-free and alcohol-free days too, because comparisons need explicit negatives.'''
 
 READ = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -215,6 +218,45 @@ def build(auth_provider=None, issuer_url=None):
         """One concept (ID such as body_weight, or its label) and its records from every source, newest first.
         Use it for trends: blood pressure, weight or a lab test over time across patient reports and clinical records."""
         return await _query('concept', concept=concept, limit=limit)
+
+    @server.tool(annotations=READ)
+    async def associations(concept: str = '', min_strength: str = 'weak', method: str | None = None, limit: int = 100) -> dict:
+        """Connections the engine found in this person's dated records: which exposures (medications, alcohol, foods)
+        track which outcomes (symptoms, weight, blood pressure), with method, strength (insufficient, weak, moderate,
+        strong), the statement to relay, effect sizes, competing explanations ranked, limitations, the supporting and
+        contrary record IDs, and pooled context when at least five opted-in people share the pattern.
+        Filter by concept ID or label. Methods: exposure_episode_contrast, constant_background, exposure_series_change.
+        Relay the strength word as given; never present an association as a cause."""
+        if min_strength not in ('insufficient', 'weak', 'moderate', 'strong'):
+            raise ToolError('min_strength must be insufficient, weak, moderate or strong')
+        return await _query('associations', concept=concept, min_strength=min_strength, method=method, limit=limit)
+
+    @server.tool(annotations=READ)
+    async def pooled_patterns(concept: str = '', limit: int = 100) -> dict:
+        """Patterns shared by at least five opted-in people, such as how often an exposure tracks a symptom across users.
+        Aggregates only: no person, record, date or text. Use them as background for this person's own associations,
+        never as evidence about this person. They are not published."""
+        return await _query('pooled-patterns', concept=concept, limit=limit)
+
+    @server.tool(annotations=READ)
+    async def check_in(date: str | None = None, days: int = 14) -> dict:
+        """What to ask in a daily check-in: the symptoms and exposures in this person's open associations, and the
+        recent days with no report. Ask about each, record "none" as an explicit absence with record_narrative, and
+        never treat an unreported day as symptom-free."""
+        return await _query('check-in', date=date, days=min(max(days, 1), 60))
+
+    @server.tool(annotations=READ)
+    async def pooling() -> dict:
+        """Whether this chart contributes to pooled patterns, the consent text, and how many patterns exist."""
+        return await _query('pooling', opt_in=False, opt_out=False)
+
+    @server.tool(annotations=WRITE)
+    async def set_pooling(opt_in: bool) -> dict:
+        """Opt this chart in to or out of pooled patterns. Only on the person's explicit request, after showing them the
+        consent text from `pooling`. Opting out removes their contribution immediately."""
+        _require_write()
+        import writes
+        return await _as_account(lambda: _jsonable(writes.set_pooling_consent(opt_in)))
 
     @server.tool(annotations=READ)
     async def query(sql: str, limit: int = 200) -> dict:

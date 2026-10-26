@@ -40,6 +40,9 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue({'search', 'fetch', 'record_narrative', 'record_medication', 'capture_conversation'} <= set(tools))
         self.assertTrue(tools['search'].annotations.read_only_hint)
         self.assertFalse(tools['record_narrative'].annotations.read_only_hint)
+        self.assertTrue({'associations', 'check_in', 'pooled_patterns', 'pooling'} <= set(tools))
+        self.assertTrue(all(tools[t].annotations.read_only_hint for t in ('associations', 'check_in', 'pooled_patterns', 'pooling')))
+        self.assertFalse(tools['set_pooling'].annotations.read_only_hint)
 
 
 if __name__ == '__main__':

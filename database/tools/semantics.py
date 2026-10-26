@@ -17,6 +17,7 @@ class Registry:
         self.aliases = {alias: c['category'] for c in categories for alias in c.get('aliases', [])}
         self._check()
         self._patterns = [[re.compile(p) for p in c['match'].get('name_patterns', [])] for c in concepts]
+        self._key_patterns = [[re.compile(p) for p in c['match'].get('key_patterns', [])] for c in concepts]
         self._codes = {}
         for index, c in enumerate(concepts):
             for code in c['match'].get('codes', []):
@@ -70,11 +71,12 @@ class Registry:
     def concept_family(self, concept):
         return concept.get('family') or self.family(concept['clinical_type'])
 
-    def curated(self, category, name, code):
+    def curated(self, category, name, code, key=None):
         """Index of the curated concept a record matches, and how it matched.
 
         Only records of the concept's own family match, so a patient note that
-        names a medication does not become a record of that medication."""
+        names a medication does not become a record of that medication. `key` is a
+        symptom or exposure record's structured key."""
         family = self.family(self.categories[category]['clinical_type'])
         if not family:
             return None, None
@@ -89,6 +91,8 @@ class Registry:
                 continue
             if name in match.get('names', []) or any(p.search(name) for p in self._patterns[index]):
                 return index, 'curated_name_match'
+            if key and any(p.search(key) for p in self._key_patterns[index]):
+                return index, 'curated_key_match'
         return None, None
 
     def record_type(self, category, concept_type):
@@ -131,12 +135,14 @@ class Registry:
         return sorted(set(problems))
 
 
-def concept_eligible(registry, category, name, assertion):
+def concept_eligible(registry, category, name, assertion, key=None):
     """Records of a type with a concept family join a concept, unless they state an absence
-    or carry no name of their own (importers fall back to the category name)."""
+    or carry neither a structured key nor a name of their own (importers fall back to the category name).
+    A patient's explicit absence of a symptom (assertion absent) keeps its concept; a source's
+    "no known medications" statement does not."""
     normalized = normalize(name)
     return bool(registry.family(registry.categories[category]['clinical_type']) and assertion != 'source_absence_statement'
-                and normalized and normalized != normalize(category))
+                and (key or (normalized and normalized != normalize(category))))
 
 
 def normalize(name):
@@ -150,40 +156,43 @@ def code_key(system, code):
 def assign_concepts(registry, resources):
     """Join records to concepts.
 
-    `resources` maps a record's resource ID to (category, name, code_system, code, assertion).
+    `resources` maps a record's resource ID to (category, name, code_system, code, assertion, key),
+    where key is a symptom or exposure record's structured key, or None.
     Returns the concepts and, per resource, (concept_id or None, basis, clinical_type).
-    Matching order: the curated registry (by source code, then by name); the
-    source's own code; a name the same source records carry with exactly one
-    code; otherwise the normalized name within the concept family.
+    Matching order: the curated registry (by source code, name, then key); the
+    source's own code; the structured key; a name the same source records carry
+    with exactly one code; otherwise the normalized name within the concept family.
     """
     assigned, concepts = {}, {}
     pending = {}
-    for rid, (category, name, system, code, assertion) in resources.items():
+    for rid, (category, name, system, code, assertion, key) in resources.items():
         default = registry.categories[category]['clinical_type']
         family = registry.family(default)
         normalized = normalize(name)
-        index, basis = registry.curated(category, normalized, code_key(system, code))
+        index, basis = registry.curated(category, normalized, code_key(system, code), key)
         if index is not None:
             c = registry.concepts[index]
             cid = 'concept:' + c['concept']
             concepts.setdefault(cid, {'concept_id': cid, 'label': c['label'], 'clinical_type': c['clinical_type'], 'basis': 'curated_registry',
                                       'family': registry.concept_family(c), 'codings': list(c['codings']), 'note': c.get('note')})
             assigned[rid] = (cid, basis)
-        elif concept_eligible(registry, category, name, assertion):
-            pending[rid] = (family, normalized, code_key(system, code))
+        elif concept_eligible(registry, category, name, assertion, key):
+            pending[rid] = (family, normalized, code_key(system, code), key)
     # Names that source records carry with exactly one code, per family.
     coded_names = {}
-    for rid, (family, normalized, key) in pending.items():
+    for rid, (family, normalized, key, _) in pending.items():
         if key:
             coded_names.setdefault((family, normalized), set()).add(key)
-    for rid, (category, name, system, code, assertion) in resources.items():
+    for rid, (category, name, system, code, assertion, _) in resources.items():
         if key := code_key(system, code):
             cid = assigned.get(rid, (None,))[0]
             if cid:
                 coded_names.setdefault((registry.family(registry.categories[category]['clinical_type']), normalize(name)), set()).add(cid)
-    for rid, (family, normalized, key) in pending.items():
+    for rid, (family, normalized, key, record_key) in pending.items():
         if key:
             cid, basis = 'concept:code:' + key, 'source_code'
+        elif record_key:
+            cid, basis = f'concept:key:{family}:{record_key}', 'source_key'
         elif len(coded_names.get((family, normalized), ())) == 1:
             target = next(iter(coded_names[(family, normalized)]))
             cid = target if target.startswith('concept:') else 'concept:code:' + target
@@ -198,7 +207,7 @@ def assign_concepts(registry, resources):
     for cid, rids in members.items():
         names, codings = {}, {}
         for rid in rids:
-            category, name, system, code, _ = resources[rid]
+            category, name, system, code, _, _ = resources[rid]
             names[name] = names.get(name, 0) + 1
             if system and code:
                 codings[(system, code)] = {'system': system, 'code': code, 'basis': 'observed_in_source'}
@@ -210,7 +219,7 @@ def assign_concepts(registry, resources):
         clinical_type = registry.common_type(types)
         label = sorted(names.items(), key=lambda item: (-item[1], item[0]))[0][0]
         concepts[cid] = {'concept_id': cid, 'label': label, 'clinical_type': clinical_type, 'family': registry.family(clinical_type),
-                         'basis': 'source_code' if cid.startswith('concept:code:') else 'source_name',
+                         'basis': 'source_code' if cid.startswith('concept:code:') else 'source_key' if cid.startswith('concept:key:') else 'source_name',
                          'codings': [c for _, c in sorted(codings.items())], 'note': None}
     result = {}
     for rid in resources:

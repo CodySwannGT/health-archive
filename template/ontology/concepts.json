@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0",
-  "description": "Curated concepts. family defaults to the clinical type's concept family; only records of that family join the concept. A record joins a concept when its source code is listed under match.codes, or its normalized name is listed under match.names or matches match.name_patterns (optionally limited to match.categories). Codings marked curated_standard_code are mappings made here, never codes the source supplied; they are not copied into records. Records with an unlisted source code join a concept for that code; others join a concept for their normalized name.",
+  "description": "Curated concepts. family defaults to the clinical type's concept family; only records of that family join the concept. A record joins a concept when its source code is listed under match.codes, or its normalized name is listed under match.names or matches match.name_patterns, or its structured symptom or exposure key matches match.key_patterns (optionally limited to match.categories). Codings marked curated_standard_code are mappings made here, never codes the source supplied; they are not copied into records. Records with an unlisted source code join a concept for that code; symptom and exposure records join a concept for their structured key; others join a concept for their normalized name.",
   "concepts": [
     {
       "concept": "body_weight",
@@ -257,6 +257,41 @@
         ]
       },
       "note": "Donor screening cholesterol. Kept separate from laboratory cholesterol results because the specimen and method differ."
+    },
+    {
+      "concept": "symptom:swelling",
+      "label": "Swelling (edema)",
+      "clinical_type": "symptom",
+      "codings": [],
+      "match": {
+        "key_patterns": [
+          "^(?!.*(lip|tongue|throat|abdom|face|facial|joint)).*(swell|swollen|edema|oedema|puffiness)"
+        ]
+      },
+      "note": "Generalized or limb swelling. Lip, tongue, throat, facial, joint and abdominal swelling are distinct symptoms with their own concepts."
+    },
+    {
+      "concept": "exposure:alcohol",
+      "label": "Alcohol intake",
+      "clinical_type": "exposure",
+      "codings": [],
+      "match": {
+        "key_patterns": [
+          "^alcohol"
+        ]
+      },
+      "note": "Patient-reported drinking. Amounts are patient drink counts unless a volume is stated."
+    },
+    {
+      "concept": "exposure:dietary_sodium",
+      "label": "Dietary sodium",
+      "clinical_type": "exposure",
+      "codings": [],
+      "match": {
+        "key_patterns": [
+          "(sodium|salt)"
+        ]
+      }
     }
   ]
 }
