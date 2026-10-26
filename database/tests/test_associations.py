@@ -107,7 +107,7 @@ class SeriesTest(unittest.TestCase):
 class PoolingTest(unittest.TestCase):
     def rows(self, patients, strength='moderate'):
         return [(f'person-{i}', 'exposure_episode_contrast', 'concept:exposure:alcohol', 'Alcohol intake', 'concept:symptom:swelling',
-                 'Swelling (edema)', 'positive', strength, {'risk_ratio': 2.0 + i}) for i in range(patients)]
+                 'Swelling (edema)', 'positive', strength, {'risk_ratio': 2.0 + i}, []) for i in range(patients)]
 
     def test_patterns_need_five_people_and_carry_no_identity(self):
         self.assertEqual(pooled_patterns(self.rows(4), 5), [])
@@ -126,11 +126,22 @@ class PoolingTest(unittest.TestCase):
         rows = self.rows(4) + [('person-0',) + self.rows(1)[0][1:]]
         self.assertEqual(pooled_patterns(rows, 5), [])
 
+    def test_medications_pool_by_generic_and_separately_by_brand(self):
+        # Five people on linaclotide: three record the Linzess brand, two only the generic.
+        rows = [(f'person-{i}', 'exposure_episode_contrast', 'medication:linaclotide', 'Linaclotide', 'concept:key:symptom:watery_diarrhea',
+                 'watery diarrhea', 'positive', 'moderate', {'risk_ratio': 3.0}, ['medication-brand:linzess'] if i < 3 else []) for i in range(5)]
+        [pattern] = pooled_patterns(rows, 5)
+        self.assertEqual((pattern['exposure_key'], pattern['contributors']), ('medication:linaclotide', 5))
+        brand = {p['exposure_key']: p for p in pooled_patterns(rows, 3)}['medication-brand:linzess']
+        self.assertEqual((brand['exposure_key'], brand['exposure_label'], brand['contributors']), ('medication-brand:linzess', 'Linzess (brand)', 3))
+
     def test_pool_keys(self):
         self.assertEqual(pool_key('concept:symptom:swelling', 'curated_registry', 'symptom', 'Swelling'), 'concept:symptom:swelling')
         self.assertEqual(pool_key('concept:key:symptom:night_sweats', 'source_key', 'symptom', 'night sweats'), 'concept:key:symptom:night_sweats')
         self.assertIsNone(pool_key('concept:name:symptom:my odd note', 'source_name', 'symptom', 'My odd note'))
         self.assertEqual(pool_key('concept:medication:testosterone', 'curated_registry', 'medication', 'Testosterone (all forms)'), 'medication:testosterone')
+        self.assertEqual(pool_key('concept:medication:linaclotide', 'curated_registry', 'medication', 'Linaclotide (Linzess)', 'linaclotide'), 'medication:linaclotide')
+        self.assertEqual(pool_key('concept:name:medication:linzess', 'source_name', 'medication', 'Linzess', 'linaclotide'), 'medication:linaclotide')
         self.assertEqual(pool_key('concept:name:medication:tb-500', 'source_name', 'medication', 'TB-500'), 'medication:tb-500')
         self.assertEqual(pool_key('x', 'source_code', 'medication', 'anastrozole (ARIMIDEX) 1 mg tablet'), 'medication:anastrozole')
 

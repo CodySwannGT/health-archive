@@ -21,6 +21,8 @@ Each record whose type has a concept family joins one **concept**, matched in th
 4. A coded concept whose name the same kind of source records carry with exactly one code. Labcorp's uncoded "Creatinine" joins the LOINC 2160-0 concept that Quest and clinical records use.
 5. A concept for the normalized name within the family.
 
+A medication concept also carries a generic name and the brands its records name. A curated concept states them (`generic`, `brands`); otherwise a clinical list's `generic (BRAND)` form supplies them, and other names, such as "Linzess (linaclotide)", are left for a curated concept rather than guessed. Connections pool medications by generic, and each brand separately.
+
 Each `REPRESENTS_CONCEPT` edge records which of these matched. Concepts are what the connections engine compares: `DERIVED_ASSOCIATION` edges link an exposure concept to an outcome concept, with the method and strength as qualifiers. They are computed, not reported, and never establish causality. A coding marked `curated_standard_code` is a mapping made in this registry. It is never copied into a record, whose `code` stays exactly what the source supplied. Joining a concept says two records measure the same thing. It does not say they are the same event.
 
 ## Rules enforced on every write

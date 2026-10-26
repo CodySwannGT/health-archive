@@ -57,20 +57,28 @@ def association_id(method, exposure, outcome, extra=''):
     return 'assoc_' + hashlib.sha256(json.dumps([method, exposure, outcome, extra]).encode()).hexdigest()[:24]
 
 
-def pool_key(concept_id, basis, family, label):
+def pool_key(concept_id, basis, family, label, generic=None):
     """A concept identity shared across patients, or None when the concept is only meaningful to one archive.
 
     Curated, coded and structured-key concepts are shared vocabularies. Medications
-    pool by name, the label without brand, form or dose, because curated medication
-    concepts belong to one archive and a code-only identity would miss self-reports."""
+    pool by generic name, so linaclotide is one medication whatever brand a record
+    names. Without a known generic they pool by the label without brand, form or
+    dose, because curated concepts belong to one archive and codes miss self-reports."""
     if family != 'medication' and basis in ('curated_registry', 'source_code', 'source_key'):
         return concept_id
+    if family == 'medication' and generic:
+        return f'medication:{generic}'
     if family == 'medication' and label:
-        name = label.casefold().split('(')[0]
-        name = re.split(r'\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iu|units?|%)\b', name)[0]
+        # Strength and form start at the first word that begins with a digit; TB-500 keeps its number.
+        name = re.split(r'\s\d', label.casefold().split('(')[0])[0]
         name = ' '.join(re.sub(r'[^a-z0-9 -]', ' ', name).split()).strip(' -')
         return f'medication:{name}' if name else None
     return None
+
+
+def brand_keys(brands):
+    """Pooling keys for the brands a patient's medication records name, pooled apart from the generic."""
+    return [f'medication-brand:{b}' for b in sorted(brands or ())]
 
 
 def fisher_greater(a, b, c, d):
@@ -158,7 +166,7 @@ def find_associations(facts):
     family, kind symptom|exposure, date, assertion present|absent, amount),
     `medications` (concept, label, status, known_since, events of date, status,
     previous, change_type, rid), `series` ({concept: {label, unit, points: [(date,
-    value, rid)]}}) and `concepts` ({concept_id: (basis, family, label)}).
+    value, rid)]}}) and `concepts` ({concept_id: (basis, family, label, generic, brands)}).
     """
     concepts = facts.get('concepts', {})
     labels = {}
@@ -391,11 +399,18 @@ def pooled_patterns(rows, minimum):
     """Aggregate opted-in patients' current associations into cross-patient patterns.
 
     `rows` are (patient_id, method, exposure_pool_key, exposure_label,
-    outcome_pool_key, outcome_label, direction, strength, effect). A pattern is
+    outcome_pool_key, outcome_label, direction, strength, effect, exposure_brand_keys).
+    A medication association counts once under its generic and once under each
+    brand key, so brand-level patterns are separate connections. A pattern is
     kept only when at least `minimum` distinct patients show it. The output
     carries no patient, record, date or free-text field."""
+    expanded = []
+    for patient, method, ekey, elabel, okey, olabel, direction, strength, effect, brands in rows:
+        expanded.append((patient, method, ekey, elabel, okey, olabel, direction, strength, effect))
+        expanded += [(patient, method, b, b.split(':', 1)[1].title() + ' (brand)', okey, olabel, direction, strength, effect)
+                     for b in brands or ()]
     groups = {}
-    for patient, method, ekey, elabel, okey, olabel, direction, strength, effect in rows:
+    for patient, method, ekey, elabel, okey, olabel, direction, strength, effect in expanded:
         if not ekey or not okey or strength == 'insufficient':
             continue
         g = groups.setdefault((method, ekey, okey, direction), {'patients': {}, 'elabels': {}, 'olabels': {}})
@@ -430,7 +445,7 @@ def load_facts(conn, patient, resource_ids):
     """The dated observations, medication timelines and measurement series of the given current records."""
     rows = conn.execute("""SELECT x.resource_id, x.category, x.name, x.clinical_date, x.assertion, x.numeric_value,
           coalesce(x.unit_ucum, x.unit_source) AS unit, x.concept_id, x.normalized->'source_details' AS details,
-          c.label AS concept_label, c.basis, c.family
+          c.label AS concept_label, c.basis, c.family, c.generic_name, c.brand_names
         FROM health.resources x LEFT JOIN health.concepts c ON c.patient_id = x.patient_id AND c.concept_id = x.concept_id
         WHERE x.patient_id = %s AND x.resource_id = ANY(%s) ORDER BY x.resource_id""", (patient, list(resource_ids))).fetchall()
 
@@ -440,7 +455,8 @@ def load_facts(conn, patient, resource_ids):
             return r['concept_id'].rsplit(':', 1)[1].replace('_', ' ')
         return r['concept_label'] or r['name']
 
-    concepts = {r['concept_id']: (r['basis'], r['family'], label(r)) for r in rows if r['concept_id']}
+    concepts = {r['concept_id']: (r['basis'], r['family'], label(r), r['generic_name'], tuple(r['brand_names'] or ()))
+                for r in rows if r['concept_id']}
     observations = []
     for r in rows:
         if (r['category'] in ('symptom_observation', 'reported_exposure') and r['clinical_date'] and r['concept_id']

@@ -18,6 +18,7 @@ Medication reports are supplemental patient-reported rows. Each has a stable med
 ## Rules
 
 - Call `medications` with `changes: true` first to find the existing `medication_id`. Reuse it; never create a second identity for the same medication.
+- Keep the user's own name for the product in the row. If it is a brand or an abbreviation (Linzess, HGH, NAC) and `concepts` with `family: medication` shows no concept with that generic, add one to `ontology/concepts.json` with `generic` and `brands` (see the health-ontology-extension skill). Generic names are what connections pool across people; each brand pools as its own connection. They are names, never codes.
 - A declared intention is not a completed action. "I'm going to stop" is a declared hold or plan with `action_basis`, not proof the doses were skipped.
 - A restart after a stop is `restarted`, not `started`; record the resumed dose and schedule in a `medication_regimen` row too.
 - Keep units exactly as written: `tbsp`, `tsp`, `IU`, `mg`. Don't convert spoon volumes to grams.

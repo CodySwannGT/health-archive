@@ -67,7 +67,7 @@ def _verify_connections(conn,patient):
     assert cited<=current,('associations cite non-current records',sorted(cited-current)[:5])
     versions=conn.execute('SELECT count(*) AS n FROM health.associations a WHERE patient_id=%s AND NOT EXISTS (SELECT 1 FROM health.association_versions v WHERE v.patient_id=a.patient_id AND v.association_id=a.association_id AND v.version_sha256=a.version_sha256)',(patient,)).fetchone()['n']
     assert versions==0,('associations without a preserved version',versions)
-    rows=conn.execute('''SELECT a.patient_id,a.method,a.exposure_pool_key,a.exposure_label,a.outcome_pool_key,a.outcome_label,a.direction,a.strength,a.effect
+    rows=conn.execute('''SELECT a.patient_id,a.method,a.exposure_pool_key,a.exposure_label,a.outcome_pool_key,a.outcome_label,a.direction,a.strength,a.effect,a.exposure_brand_keys
       FROM health.associations a JOIN health.pooling_consent c ON c.patient_id=a.patient_id AND c.opted_in WHERE a.is_current''').fetchall()
     fresh={p['pattern_id']:p['contributors'] for p in pooled_patterns([tuple(r.values()) for r in rows],MIN_CONTRIBUTORS)}
     pooled={r['pattern_id']:r['contributors'] for r in conn.execute('SELECT pattern_id,contributors FROM health.pooled_patterns')}
