@@ -607,7 +607,8 @@
             "added_to_list",
             "started",
             "stopped",
-            "paused"
+            "paused",
+            "restarted"
           ]
         },
         "subject_source": {
@@ -766,6 +767,26 @@
                 "properties": {
                   "status": {
                     "const": "on-hold"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "change_type": {
+                "const": "restarted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current": {
+                "properties": {
+                  "status": {
+                    "const": "active"
                   }
                 }
               }

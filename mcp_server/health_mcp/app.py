@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / 'database/tools'))
 from mcp.server.auth.middleware.auth_context import get_access_token  # noqa: E402
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions  # noqa: E402
 from mcp.server.mcpserver import MCPServer  # noqa: E402
+from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
 from mcp.types import ToolAnnotations  # noqa: E402
 
 from common import connect, reset_account, use_account  # noqa: E402
@@ -57,11 +58,17 @@ def _account():
 
 def _as_account(fn):
     """Run fn in a worker thread as the signed-in user's account."""
+    from jsonschema import ValidationError
     def run():
         account = _account()
         token = use_account(account) if account else None
         try:
             return fn()
+        except ValidationError as exc:
+            # The client needs the reason to correct its input; the SDK hides other exceptions' text.
+            raise ToolError(f"Schema validation failed at {'/'.join(map(str, exc.absolute_path)) or 'the record'}: {exc.message}") from exc
+        except (ValueError, PermissionError, KeyError) as exc:
+            raise ToolError(str(exc) if not isinstance(exc, KeyError) else f'Missing required field {exc}') from exc
         finally:
             if token:
                 reset_account(token)
@@ -239,7 +246,8 @@ def build(auth_provider=None, issuer_url=None):
         """Record a reviewed supplemental medication regimen, change or administration row.
 
         `row` is the medication record without provenance or content_sha256, plus evidence_quotes copied
-        verbatim from source_text. `report` names the patient-report folder, such as 2026-10-24-dose-change."""
+        verbatim from source_text and reported_at, the ISO 8601 time with offset when the patient reported it.
+        Read meds/medication.schema.json with fetch for each record type's required fields. `report` names the patient-report folder, such as 2026-10-24-dose-change."""
         _require_write()
         import writes
         def run():
