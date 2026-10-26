@@ -5,9 +5,24 @@ description: Run the user's morning health check-in like a careful triage nurse,
 
 # Morning check-in
 
-Treat the check-in as a short daily visit with a good triage nurse: safety first, one question at a time, every answer anchored in time, and nothing interpreted until the end. It should take three to five minutes.
+Treat the check-in as a short daily visit with a good triage nurse: safety first, one question at a time, every answer anchored in time, and nothing interpreted until the end. It should take three to five minutes, and never ask the same thing twice.
 
 Call `check_in` first. It returns the steps in order, already tailored to the user's records: which measurements they track, whether they drink, which symptoms to ask about and what each one was last time, and which days have no check-in. Follow it. Skip nothing it includes and add nothing it leaves out, apart from follow-ups on what the user raises.
+
+## Two ways to run it
+
+- **One at a time** (default): follow the steps below.
+- **All at once**: when the user asks for all the questions together, or for a list, send `questionnaire` from `check_in` exactly as numbered. They answer by number. Then send one numbered list of only the follow-ups their answers left open, such as a missing date or severity. Then read back.
+
+Mention the choice in the opening line: "Say 'all at once' to get every question as a numbered list."
+
+## Never ask the same thing twice
+
+Users tire fast, and a repeated question also invites inconsistent answers.
+- Before each question, check what earlier answers already settled. If an answer covers a later item, don't ask it; include it in the read-back for them to confirm. For example, Bristol type 6 already says the stool wasn't watery, and "no black stool" in the urgent screen already answers the dark-stool symptom.
+- Ask each symptom group in `groups` as its one question, with the Bristol type once. Then ask only what the answer left open, per the group's `follow_up`.
+- An item marked `asked_in_urgent_screen` is answered by the urgent screen. Don't ask it again.
+- Ask 0 to 10 severity only where `severity` is true. Things seen rather than felt, such as stool shape or urine color, get yes or no and when.
 
 ## Pace
 
@@ -23,8 +38,8 @@ Between questions, make no tool call except `capture_conversation` for the turn 
 6. **Workout.** "Did you work out yesterday? If so, describe it, for example 40 minutes of cardio twice, or 90 minutes of weight training."
 7. **Medications.** Two questions: anything added, changed or stopped since the last check-in, and any as-needed medications taken since then. Holds and restarts are changes.
 8. **Exposures.** Only those listed, such as yesterday's drinks.
-9. **Symptoms, one at a time.** "Do you still have …?"
-   - Yes: when (last night, this morning, all day), severity 0 to 10, better, same or worse. For bowel symptoms, the Bristol type (1 separate hard lumps, 2 lumpy sausage, 3 cracked sausage, 4 smooth sausage, 5 soft blobs, 6 mushy, 7 liquid).
+9. **Symptoms.** First each group in `groups` as one question, such as all bowel symptoms with one Bristol type (1 separate hard lumps, 2 lumpy sausage, 3 cracked sausage, 4 smooth sausage, 5 soft blobs, 6 mushy, 7 liquid). Then each remaining item, one at a time: "Do you still have …?"
+   - Yes: when (last night, this morning, all day). Where `severity` is true, also 0 to 10, and better, same or worse.
    - No, and it was present last time (`if_no` says so): "When did it stop?"
    - No otherwise: a plain no for today.
 10. **Missed days.** First ask whether they want to fill them in; they may not remember. Only on yes, ask about the days and items they recall.
@@ -40,7 +55,7 @@ Record once, after the read-back, as one narrative source named `YYYY-MM-DD-morn
 | Sleep | `sleep_observation` dated today (the morning it ended) |
 | Workout | `exercise_session` dated yesterday, one per session with `modality` and `duration`; `status: none_reported` with null modality and duration for no workout |
 | Drinks | `reported_exposure` with a drink-count `amount`; zero drinks is `assertion: absent` |
-| Symptom yes | `symptom_observation`, `assertion: present`, `temporal_scope: dated_episode`, `occurrence` on the day, `time_of_day`, `numeric_severity` (`{"value": 4, "scale": "0-10", "source_text": "4"}`), and `stool_form` (`{"bristol_type": 2, "source_text": "2"}`) for stool |
+| Symptom yes | `symptom_observation`, `assertion: present`, `temporal_scope: dated_episode`, `occurrence` on the day, `time_of_day`, `numeric_severity` (`{"value": 4, "scale": "0-10", "source_text": "4"}`) when asked, and `stool_form` (`{"bristol_type": 2, "source_text": "2"}`) on the stool records the Bristol answer describes |
 | Symptom no | `symptom_observation`, `assertion: absent`, `occurrence` today, or the day it stopped |
 | Medication change, as-needed dose | `record_medication` (`medication_change`, `medication_administration`) |
 

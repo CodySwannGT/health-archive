@@ -241,9 +241,11 @@ def build(auth_provider=None, issuer_url=None):
     @server.tool(annotations=READ)
     async def check_in(date: str | None = None, days: int = 14) -> dict:
         """The morning check-in agenda, in order and tailored to this person's records: urgent screen, open question,
-        tracked measurements, sleep, yesterday's workout, medication changes and as-needed doses, exposures, each
-        symptom with what it was last time, and an offer to fill in missed days. Follow the health-daily-check-in skill,
-        record every answer including "no", and never treat an unreported day as symptom-free."""
+        tracked measurements, sleep, yesterday's workout, medication changes and as-needed doses, exposures, symptoms
+        (overlapping ones grouped into one question) with what each was last time, and an offer to fill in missed days.
+        `questionnaire` is the same agenda as one numbered list, for a user who wants to answer all at once.
+        Follow the health-daily-check-in skill, never ask what an earlier answer settled, record every answer
+        including "no", and never treat an unreported day as symptom-free."""
         return await _query('check-in', date=date, days=min(max(days, 1), 60))
 
     @server.tool(annotations=READ)

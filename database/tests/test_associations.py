@@ -214,11 +214,37 @@ class CheckInTest(unittest.TestCase):
         items = {i['label']: i for i in plan['symptoms']['items']}
         self.assertEqual(list(items)[0], 'Swelling')
         self.assertEqual(set(items), {'Swelling', 'Constipation', 'very dark stool'})
-        self.assertTrue(items['Constipation']['bristol'])
-        self.assertIn('Bristol', items['Constipation']['if_yes'])
-        self.assertFalse(items['Swelling']['bristol'])
-        # A reported red-flag symptom joins the urgent screen.
-        self.assertTrue(any(i.startswith('very dark stool') for i in plan['urgent']['items']))
+        # A reported red-flag symptom is folded into the urgent screen item it overlaps, and not asked again.
+        self.assertTrue(items['very dark stool']['asked_in_urgent_screen'])
+        self.assertEqual(len(plan['urgent']['items']), 8)
+        self.assertIn('you reported very dark stool on 2026-10-11', next(i for i in plan['urgent']['items'] if i.startswith('black or tarry stool')))
+        self.assertTrue(items['Swelling']['severity'])
+
+    def test_overlapping_bowel_symptoms_are_one_question_with_one_bristol_type(self):
+        facts = swelling_facts()
+        facts['reports'] = [{'concept': c, 'label': l, 'kind': 'symptom', 'reported': D(1), 'assertion': 'present'} for c, l in (
+            ('concept:symptom:constipation', 'Constipation'), ('concept:key:symptom:small_ribbon_shaped_stool', 'small ribbon shaped stool'),
+            ('concept:key:symptom:watery_diarrhea', 'watery diarrhea'), ('concept:symptom:bloating_trapped_gas', 'Bloating or trapped gas'),
+            ('concept:key:symptom:more_yellow_urine', 'more yellow urine'))]
+        plan = check_in_plan(facts, find_associations(facts), D(24), window=5)
+        steps = {s['key']: s for s in plan['steps']}
+        (bowel,) = steps['symptoms']['groups']
+        self.assertEqual(bowel['key'], 'bowel')
+        self.assertTrue(bowel['bristol'])
+        self.assertEqual(len(bowel['items']), 4)
+        self.assertEqual(bowel['ask'].count('Bristol'), 1)
+        items = {i['label']: i for i in steps['symptoms']['items']}
+        # Seen, not felt: no 0 to 10 scale. A lone urinary symptom is asked by itself.
+        self.assertFalse(items['small ribbon shaped stool']['severity'])
+        self.assertTrue(items['Constipation']['severity'])
+        self.assertIsNone(items['more yellow urine']['group'])
+        self.assertIn('Bloating or trapped gas'.lower(), bowel['follow_up'])
+        self.assertNotIn('ribbon', bowel['follow_up'].split('severity')[0])
+        questions = plan['questionnaire']
+        self.assertTrue(questions[0].startswith('1. Before we start'))
+        self.assertEqual([q.split('.')[0] for q in questions], [str(n) for n in range(1, len(questions) + 1)])
+        self.assertEqual(sum('Bristol' in q for q in questions), 1)
+        self.assertFalse(any('ribbon' in q and 'Do you still' in q for q in questions))
 
     def test_a_symptom_reported_at_the_last_check_in_is_asked_again(self):
         facts = swelling_facts()
