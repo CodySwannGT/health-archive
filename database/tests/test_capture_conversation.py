@@ -136,6 +136,18 @@ class ConversationCaptureTests(unittest.TestCase):
         self.assertEqual(rows[0],legacy)
         self.assertEqual(rows[1]['provenance']['original_session_path'],f'conversations/connector-sessions/{sid}.jsonl')
 
+    def test_deferred_connector_sources_are_captured_by_the_next_write(self):
+        sid='abcdef01-0000-0000-0000-000000000003'
+        capture.append_connector_messages(self.root,sid,'codex',[{'role':'assistant','text':'Any swelling today?'},
+                                                                  {'role':'user','text':'No'}],'2026-10-26T14:00:00Z')
+        self.assertFalse((self.root/'conversations/messages.jsonl').exists())
+        self.assertEqual([r['new_messages'] for r in capture.capture_pending(self.root)],[2])
+        self.assertEqual(capture.capture_pending(self.root),[])
+        capture.append_connector_messages(self.root,sid,'codex',[{'role':'user','text':'Slept 8 hours'}],'2026-10-26T14:01:00Z')
+        self.assertEqual([r['new_messages'] for r in capture.capture_pending(self.root)],[1])
+        rows=[json.loads(l) for l in (self.root/'conversations/messages.jsonl').read_text().splitlines()]
+        self.assertEqual([r['message_text'] for r in rows],['Any swelling today?','No','Slept 8 hours'])
+
     def test_privacy_gap_persists_without_changing_source_identity(self):
         for ordinal,second,text in [(1,1,'Before gap'),(2,2,'Do not retain this'),(3,3,'Resume recording')]:
             event=self.message(ordinal,'user',text)

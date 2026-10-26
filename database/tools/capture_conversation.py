@@ -106,6 +106,20 @@ def append_connector_messages(archive_root, session_id, client, messages, receiv
     return path,len(added)
 
 
+def capture_pending(archive_root):
+    """Capture connector session sources appended since their last checkpoint.
+
+    A connector capture stores submitted messages as source first and defers
+    projection, so every write sweeps those sources into archive messages."""
+    archive_root=Path(archive_root);captured=[]
+    for path in sorted((archive_root/CONNECTOR_SESSIONS).glob('*.jsonl')):
+        checkpoint=archive_root/'conversations/sessions'/path.stem/'checkpoint.json'
+        if checkpoint.exists() and json.loads(checkpoint.read_text())['source_complete_bytes']==path.stat().st_size:
+            continue
+        captured.append(capture(path,archive_root=archive_root))
+    return captured
+
+
 def _claude_code_items(event, prompts):
     """Map one Claude Code transcript event to user-facing message items.
 

@@ -891,6 +891,8 @@ def ingest(put_paths=(), apply=None, from_disk=False, operation='reproject', ret
             (workspace/rel).parent.mkdir(parents=True,exist_ok=True)
             (workspace/rel).write_bytes(content)
         applied=apply(workspace) if apply else None
+        from capture_conversation import capture_pending
+        pending=capture_pending(workspace)
         retired=[]
         for rel in retire_paths:
             if rel not in artifacts:raise ValueError('Not a current database archive file: '+rel)
@@ -908,7 +910,7 @@ def ingest(put_paths=(), apply=None, from_disk=False, operation='reproject', ret
                 conn.execute('UPDATE health.artifacts SET retired_run=%s,retired_reason=%s WHERE patient_id=%s AND path=ANY(%s)',(summary['run_id'],retire_reason,current_account().patient_id,retired))
         finally:
             ROOT=checkout
-    summary.update(changed_paths=changed,retired_paths=retired,refused_local_files=refused)
+    summary.update(changed_paths=changed,retired_paths=retired,refused_local_files=refused,captured_pending_conversations=pending)
     if applied is not None:summary['applied']=applied
     (DB/'artifacts').mkdir(exist_ok=True)
     (DB/'artifacts/last-ingestion.json').write_text(json.dumps(summary,indent=2,default=str)+'\n')
