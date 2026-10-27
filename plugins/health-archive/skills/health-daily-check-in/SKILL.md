@@ -7,14 +7,17 @@ description: Run the user's morning health check-in like a careful triage nurse,
 
 Treat the check-in as a short daily visit with a good triage nurse: safety first, one question at a time, every answer anchored in time, and nothing interpreted until the end. It should take three to five minutes, and never ask the same thing twice.
 
-Call `check_in` first. It returns the steps in order, already tailored to the user's records: which measurements they track, whether they drink, which symptoms to ask about and what each one was last time, and which days have no check-in. Follow it. Skip nothing it includes and add nothing it leaves out, apart from follow-ups on what the user raises.
+Call `check_in` first.
+- If `intake_needed` is true, the person has no agreed plan yet. Run the `health-intake` skill instead, then today's check-in only if they want it.
+- Otherwise it returns the steps in order: a standard core, plus everything their plan and records add (measurements from their equipment, the habits they track, their symptoms with what each was last time, tailored questions, and days with no check-in). Follow it. Skip nothing it includes and add nothing it leaves out, apart from follow-ups on what the user raises.
+- Every daily question comes from the plan, so it is asked the same way every day. Never improvise a new daily question. Propose it instead (see "Changing the plan").
 
 ## Two ways to run it
 
-- **One at a time** (default): follow the steps below.
-- **All at once**: when the user asks for all the questions together, or for a list, send `questionnaire` from `check_in` exactly as numbered. They answer by number. Then send one numbered list of only the follow-ups their answers left open, such as a missing date or severity. Then read back.
+- **One at a time**: follow the steps below.
+- **All at once**: send `questionnaire` from `check_in` exactly as numbered. They answer by number. Then send one numbered list of only the follow-ups their answers left open, such as a missing date or severity. Then read back.
 
-Mention the choice in the opening line: "Say 'all at once' to get every question as a numbered list."
+Use `preferences.mode` from `check_in`, unless the user asks for the other way today. Mention the other way in the opening line, for example: "Say 'all at once' to get every question as a numbered list."
 
 ## Never ask the same thing twice
 
@@ -42,8 +45,15 @@ Between questions, make no tool call except `capture_conversation` for the turn 
    - Yes: when (last night, this morning, all day). Where `severity` is true, also 0 to 10, and better, same or worse.
    - No, and it was present last time (`if_no` says so): "When did it stop?"
    - No otherwise: a plain no for today.
-10. **Missed days.** First ask whether they want to fill them in; they may not remember. Only on yes, ask about the days and items they recall.
-11. **Close.** Read back everything you will record, get a yes, record it, then call `associations` and tell them what changed in a line or two, with any safety note.
+10. **Tailored questions.** Each item in `tailored`, worded exactly as given.
+11. **Missed days.** First ask whether they want to fill them in; they may not remember. Only on yes, ask about the days and items they recall.
+12. **Review**, when `review` is present: ask each item. Record each agreed change as a `check_in_tracking` record.
+13. **Close.** Read back everything you will record, get a yes, record it, then call `associations` and tell them what changed in a line or two, with any safety note.
+
+## Changing the plan
+
+- "Stop asking about X" or "also ask me about Y": record a `check_in_tracking` record (`action` stop or track) with their words as evidence, then confirm.
+- When an answer suggests something worth tracking daily, such as a new medication or a new recurring symptom, propose it once with the reason. Record it only if they agree.
 
 ## Recording
 

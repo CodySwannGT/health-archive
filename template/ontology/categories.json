@@ -70,6 +70,14 @@
       "description": "Clinical record (C-CDA): care team members."
     },
     {
+      "category": "check_in_tracking",
+      "domain": "patient_reports",
+      "subject_area": "patient_statements",
+      "clinical_type": "check_in_tracking",
+      "schema_path": "symptoms/symptom.schema.json",
+      "description": "One agreed change to the daily check-in: start or stop tracking a measurement, exposure or symptom, a tailored question, or a check-in preference."
+    },
+    {
       "category": "clinical_notes",
       "domain": "cleveland_clinic",
       "subject_area": "care",

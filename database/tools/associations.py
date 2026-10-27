@@ -394,6 +394,33 @@ SYMPTOM_GROUPS = [('bowel', re.compile(r'stool|constipat|diarrh|bowel|rectum|blo
 OBSERVED_PATTERN = re.compile(r'stool|urine|diarrh|colou?r|dark|ribbon|shape|blood|rash|lips', re.I)
 
 
+# A tracked measurement key that names a reading of several concepts.
+MEASUREMENT_KEYS = {'blood_pressure': ['concept:systolic_blood_pressure', 'concept:diastolic_blood_pressure']}
+SETTINGS = {'mode': 'one_at_a_time', 'check_in_time': 'morning'}
+REVIEW_DAYS = 30
+
+
+def tracking_plan(tracking):
+    """The current check-in plan: the latest agreed action per item kind and key."""
+    plan = {}
+    for t in sorted(tracking, key=lambda t: (t['reported_at'], t['rid'])):
+        plan[(t['kind'], t['key'])] = t
+    return plan
+
+
+def keyed_concepts(facts):
+    """The concept each structured symptom or exposure key joined, from the patient's reports."""
+    return {(r['kind'], r['key']): r['concept'] for r in facts.get('reports', []) if r.get('key')}
+
+
+def tracked_concepts(plan, keyed, kind, action):
+    concepts = {}
+    for (k, key), t in plan.items():
+        if k == kind and t['action'] == action:
+            concepts[keyed.get((kind, key), f'concept:key:{kind}:{key}')] = t
+    return concepts
+
+
 def check_in_plan(facts, associations, today, window=14, active_days=60):
     """The morning check-in agenda, in order, built from the patient's records.
 
@@ -403,8 +430,16 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
     associations and from active symptoms: present when last reported, within
     `active_days`, and either described as ongoing (current, recurring or a
     treatment response, not tied to one day) or reported at the last check-in.
-    A one-off report about an earlier day and a lifelong trait are not active."""
+    A one-off report about an earlier day and a lifelong trait are not active.
+
+    The tracking plan agreed at intake and since adds measurements, exposures,
+    symptoms and tailored questions, and removes items the patient chose to
+    stop. Without a plan, `intake_needed` is true."""
     recorded = daily(facts['observations'])
+    plan = tracking_plan(facts.get('tracking', []))
+    keyed = keyed_concepts(facts)
+    stopped_symptoms = tracked_concepts(plan, keyed, 'symptom', 'stop')
+    stopped_exposures = tracked_concepts(plan, keyed, 'exposure', 'stop')
     since = facts.get('last_reported')
     since = since if since and since < today else None
     since_text = f'{since:%A}, {since:%B} {since.day}' if since else 'your last check-in'
@@ -441,6 +476,13 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
             item = symptoms.setdefault(concept, {'label': reports[-1]['label'], 'associations': set(), 'reasons': set()})
             item['reasons'].add('active_symptom')
 
+    for concept, t in tracked_concepts(plan, keyed, 'symptom', 'track').items():
+        item = symptoms.setdefault(concept, {'label': t['label'], 'associations': set(), 'reasons': set()})
+        item['reasons'].add('tracking_plan')
+        item['question'] = t['question']
+    for concept in stopped_symptoms:
+        symptoms.pop(concept, None)
+
     symptom_items = []
     for concept, item in symptoms.items():
         day, state = last_state(concept)
@@ -454,7 +496,7 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
             # A red-flag symptom is asked once, in the urgent screen.
             'asked_in_urgent_screen': bool(RED_FLAG_PATTERN.search(text)),
             'severity': not observed,
-            'ask': f'Do you still have {label.lower()}?',
+            'ask': item.get('question') or f'Do you still have {label.lower()}?',
             'if_yes': 'Ask when it last happened (last night, this morning, all day).' if observed else
                       'Ask when (last night, this morning, all day), severity 0 to 10, and better, same or worse than last time.',
             'if_no': 'Ask when it stopped, and record it as absent from that day.' if state == 'present'
@@ -500,25 +542,49 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
             urgent[n] += f' ({note})'
     order = ['concept:body_weight', 'concept:systolic_blood_pressure', 'concept:diastolic_blood_pressure', 'concept:heart_rate']
     measured = sorted(facts.get('reported_measurements', {}).items(), key=lambda m: (order.index(m[0]) if m[0] in order else len(order), m[1]['label']))
+    tracked_measurements, stopped_measurements = {}, set()
+    for (kind, key), t in plan.items():
+        if kind == 'measurement':
+            for c in MEASUREMENT_KEYS.get(key, ['concept:' + key]):
+                if t['action'] == 'track':
+                    tracked_measurements[c] = t
+                else:
+                    stopped_measurements.add(c)
     measurements = [{'concept': c, 'label': m['label'], 'unit': m['unit'], 'last_reported': m['last'].isoformat()}
-                    for c, m in measured if (today - m['last']).days <= 30]
+                    for c, m in measured if c not in stopped_measurements and ((today - m['last']).days <= 30 or c in tracked_measurements)]
+    reported = facts.get('reported_measurements', {})
+    measurements += [{'concept': c, 'label': t['label'], 'unit': None, 'last_reported': None}
+                     for c, t in tracked_measurements.items() if c not in reported]
+    measurements.sort(key=lambda m: order.index(m['concept']) if m['concept'] in order else len(order))
     drinks = any(o['concept'] == 'concept:exposure:alcohol' and o['assertion'] == 'present' and (today - o['date']).days <= 90
                  for o in facts['observations'])
+    for concept, t in tracked_concepts(plan, keyed, 'exposure', 'track').items():
+        exposures.setdefault(concept, {'label': t['label'], 'associations': set(), 'reasons': {'tracking_plan'}, 'question': t['question']})
     exposure_items = []
-    if drinks or 'concept:exposure:alcohol' in exposures:
+    alcohol_tracked = ('exposure', 'alcohol') in plan and plan[('exposure', 'alcohol')]['action'] == 'track'
+    if (drinks or alcohol_tracked or 'concept:exposure:alcohol' in exposures) and 'concept:exposure:alcohol' not in stopped_exposures \
+            and plan.get(('exposure', 'alcohol'), {}).get('action') != 'stop':
         exposure_items.append({'concept': 'concept:exposure:alcohol', 'label': 'Alcohol intake',
                                'ask': 'How many drinks did you have yesterday, and roughly when?', 'record_as': 'reported_exposure with a drink-count amount; 0 drinks is absent'})
     for concept, item in sorted(exposures.items()):
-        if concept.startswith(('concept:derived:', 'concept:medication:')) or concept == 'concept:exposure:alcohol' \
-                or any(m['concept'] == concept for m in facts['medications']):
+        if concept.startswith(('concept:derived:', 'concept:medication:')) or concept in ('concept:exposure:alcohol', 'concept:key:exposure:alcohol') \
+                or concept in stopped_exposures or any(m['concept'] == concept for m in facts['medications']):
             continue
-        exposure_items.append({'concept': concept, 'label': item['label'], 'ask': f"Any {item['label'].lower()} yesterday, and how much?",
+        exposure_items.append({'concept': concept, 'label': item['label'],
+                               'ask': item.get('question') or f"Any {item['label'].lower()} yesterday, and how much?",
                                'record_as': 'reported_exposure; none is absent'})
 
     days_seen = {o['date'] for o in facts['observations']} | {d for m in facts.get('reported_measurements', {}).values() for d in m['dates']}
-    first = max(today - timedelta(days=window), since or today - timedelta(days=window))
+    # Days before the patient's first report or plan are not missed; a new patient has none.
+    started = min(days_seen | {t['reported'] for t in facts.get('tracking', []) if t['reported']}, default=today)
+    first = max(today - timedelta(days=window), since or today - timedelta(days=window), started)
     missed = [(first + timedelta(days=i)).isoformat() for i in range((today - first).days)
               if first + timedelta(days=i) not in days_seen and first + timedelta(days=i) != today]
+
+    tailored = [{'key': key, 'label': t['label'], 'ask': t['question']} for (kind, key), t in sorted(plan.items())
+                if kind == 'question' and t['action'] == 'track']
+    preferences = {**SETTINGS, **{key: t['value'] for (kind, key), t in plan.items() if kind == 'setting' and t['action'] == 'track'}}
+    review = review_items(facts, plan, symptom_items, today)
 
     steps = [
         {'key': 'opening', 'say': f"Morning check-in for {today:%A}, {today:%B} {today.day}." + (f' Your last check-in was {since_text}, so this covers since then.' if since else '')},
@@ -526,7 +592,8 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
          'on_yes': 'Stop the check-in. Advise urgent care or emergency services as appropriate, and record what was reported.'},
         {'key': 'open', 'ask': f'Anything new or different since {since_text}, good or bad?',
          'record_as': 'whatever fits: symptom_observation, reported_exposure, patient_context'},
-        {'key': 'measurements', 'ask': 'What were your ' + measurement_names(measurements) + ' this morning?',
+        {'key': 'measurements', 'ask': ('What were your ' if ' and ' in measurement_names(measurements) else 'What was your ')
+                                       + measurement_names(measurements) + ' this morning?',
          'items': measurements, 'record_as': 'anthropometric_measurement, vital_sign_measurement (blood pressure components paired)'} if measurements else None,
         {'key': 'sleep', 'ask': 'How did you sleep last night? When did you go to bed and get up, and did you wake up during the night?',
          'record_as': 'sleep_observation dated today'},
@@ -539,14 +606,97 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
         {'key': 'symptoms', 'groups': groups, 'items': symptom_items,
          'scales': {'severity': '0 to 10, 0 none and 10 worst imaginable', 'stool': 'Bristol type 1 to 7'},
          'record_as': 'symptom_observation per symptom with occurrence date, numeric_severity for felt symptoms and, for stool, stool_form'} if symptom_items else None,
+        {'key': 'tailored', 'items': tailored, 'record_as': 'whatever fits the answer: symptom_observation, reported_exposure, patient_context'} if tailored else None,
         {'key': 'missed_days', 'days': missed,
          'ask': 'I have no check-in for ' + ', '.join(missed) + '. Do you want to fill any of those in? It is fine if you do not remember.',
          'on_yes': 'Ask only about the days and items they can recall; note in source_context that the answers are recalled.'} if missed else None,
+        {'key': 'review', 'items': review,
+         'ask': 'A quick review of what I ask each day.',
+         'on_answer': 'Record each agreed change as a check_in_tracking record. Change nothing they did not agree to.'} if review else None,
         {'key': 'close', 'say': 'Read back everything you will record, confirm it, record it, then call associations and share what changed in a line or two, plus any safety note.'},
     ]
     steps = [dict(step=n, **s) for n, s in enumerate([s for s in steps if s], 1)]
-    return {'date': today.isoformat(), 'covers_since': since.isoformat() if since else None, 'steps': steps,
-            'questionnaire': questionnaire(steps)}
+    return {'date': today.isoformat(), 'covers_since': since.isoformat() if since else None, 'intake_needed': not plan,
+            'preferences': preferences, 'steps': steps, 'questionnaire': questionnaire(steps)}
+
+
+def review_items(facts, plan, symptom_items, today):
+    """Questions about the plan itself, at most once every REVIEW_DAYS after the last plan change."""
+    changed = max((t['reported'] for t in plan.values() if t['reported']), default=None)
+    if changed is None or (today - changed).days < REVIEW_DAYS:
+        return []
+    items = []
+    for i in symptom_items:
+        if 'tracking_plan' in i['reasons'] and i['last_state'] == 'absent' and i['last_state_date'] \
+                and (today - date.fromisoformat(i['last_state_date'])).days >= REVIEW_DAYS:
+            items.append({'concept': i['concept'], 'ask': f"You haven't had {i['label'].lower()} since at least {i['last_state_date']}. Should I stop asking about it?"})
+    for m in facts['medications']:
+        started = [e['date'] for e in m['events'] if e['status'] == 'active'] + ([m['known_since']] if m['known_since'] else [])
+        if any(d and d > changed for d in started):
+            items.append({'concept': m['concept'], 'ask': f"You started {m['label']} recently. Is there anything you want me to ask about each day while you take it?"})
+    return items
+
+
+EQUIPMENT = {'bathroom scale': 'body_weight', 'blood pressure cuff': 'blood_pressure', 'pulse (from a cuff, watch or fingertip)': 'heart_rate',
+             'glucose meter or continuous glucose monitor': 'blood_glucose', 'thermometer': 'body_temperature', 'pulse oximeter': 'oxygen_saturation'}
+HABITS = ['alcohol', 'caffeine', 'nicotine or tobacco', 'cannabis', 'diet pattern', 'usual sleep', 'usual exercise']
+
+
+def current_status(medication):
+    """A regimen's status after its latest reported change; the regimen record keeps the status it was reported with."""
+    events = sorted(medication['events'], key=lambda e: e['date'])
+    return events[-1]['status'] if events else medication['status']
+
+
+def intake_plan(facts, associations, today):
+    """The first-visit intake, or a catch-up for an archive that already holds records.
+
+    Each section lists what the archive already knows, so only the gaps are asked.
+    The intake ends with an agreed tracking plan: the measurements, exposures,
+    symptoms and tailored questions the daily check-in will ask, recorded as
+    check_in_tracking records."""
+    current = check_in_plan(facts, associations, today)
+    steps = {s['key']: s for s in current['steps']}
+    symptoms = [i['label'] for i in steps.get('symptoms', {}).get('items', [])]
+    medications = sorted({m['label'] for m in facts['medications'] if current_status(m) == 'active'})
+    habits = sorted({r['label'] for r in facts.get('reports', []) if r['kind'] == 'exposure'})
+    recent = [{'concept': c, 'label': m['label']} for c, m in facts.get('reported_measurements', {}).items() if (today - m['last']).days <= 90]
+    measured = measurement_names(recent).replace(' and ', ', ').split(', ') if recent else []
+    sections = [
+        {'key': 'goals', 'ask': 'What do you most want to figure out or keep an eye on?',
+         'why': 'Goals decide which connections to look for and which tailored questions to propose.', 'known': []},
+        {'key': 'symptoms', 'ask': 'What is bothering you now? For each one: since when, how often, how bad from 0 to 10, and what seems to set it off or ease it.',
+         'known': symptoms, 'record_as': 'symptom_observation (current_state), recurring_pattern, patient_hypothesis for suspected triggers'},
+        {'key': 'medications', 'ask': 'Everything you take, including supplements, peptides and injectables: dose, schedule and when you started.',
+         'known': medications, 'record_as': 'record_medication regimens'},
+        {'key': 'history', 'ask': 'Any diagnosed conditions, past surgeries, allergies, and conditions that run in your family?',
+         'known': [], 'record_as': 'patient_context', 'note': 'Check profile and the clinical records first; ask only what they do not cover.'},
+        {'key': 'habits', 'ask': 'Tell me about ' + ', '.join(HABITS) + '.', 'known': habits,
+         'record_as': 'reported_exposure with amounts and schedule, exercise_routine'},
+        {'key': 'equipment', 'ask': 'Which of these do you have at home: ' + ', '.join(EQUIPMENT) + '?', 'known': measured,
+         'why': 'Each one becomes a daily measurement question.'},
+        {'key': 'basics', 'ask': 'Your age, sex and height.', 'known': [], 'record_as': 'patient_demographics, anthropometric_measurement',
+         'note': 'Check profile first.'},
+        {'key': 'preferences', 'ask': 'Do you want to check in in the morning or the evening, and get questions one at a time or all at once as a numbered list?',
+         'known': [], 'record_as': 'check_in_tracking settings: mode, check_in_time'},
+        {'key': 'tracking_plan', 'ask': 'Propose the daily check-in and ask them to approve or change it.',
+         'propose': ['The standard core, always asked: urgent screen, anything new, sleep, yesterday\'s workout, medication changes and as-needed doses.',
+                     'One measurement item for each piece of equipment they have.',
+                     'One exposure item for each habit they report, such as drinks or caffeine.',
+                     'Each current symptom.',
+                     'At most three tailored questions tied to their goals, medications or suspected triggers. An example is appetite and nausea for someone starting a GLP-1 agonist. Say why each is proposed.'],
+         'record_as': 'one check_in_tracking record per approved item, proposed_by assistant_approved_by_patient unless they asked for it themselves'},
+    ]
+    confirm = {'symptoms': 'I have these as current: {}. Which are still going on, and is anything else bothering you? For anything new: since when, how often, how bad from 0 to 10, and what seems to set it off.',
+               'medications': 'I have you taking: {}. Is anything missing, stopped or changed, including supplements, peptides and injectables?',
+               'habits': 'I have reports about: {}. Tell me about anything of ' + ', '.join(HABITS) + ' that is missing or has changed.',
+               'equipment': 'You have reported your {} recently. Which of these do you have at home: ' + ', '.join(EQUIPMENT) + '?'}
+    for section in sections:
+        if section.get('known') and section['key'] in confirm:
+            section['ask'] = confirm[section['key']].format(', '.join(section['known']))
+    return {'date': today.isoformat(), 'catch_up': bool(facts.get('reports') or facts['medications'] or facts.get('reported_measurements')),
+            'sections': sections, 'equipment_measurements': EQUIPMENT,
+            'questionnaire': [f"{n}. {s['ask']}" for n, s in enumerate([s for s in sections if s['key'] != 'tracking_plan'], 1)]}
 
 
 def measurement_names(measurements):
@@ -554,8 +704,8 @@ def measurement_names(measurements):
     plain = {'concept:body_weight': 'weight', 'concept:heart_rate': 'pulse'}
     names = []
     for m in measurements:
-        name = 'blood pressure' if m['concept'] in ('concept:systolic_blood_pressure', 'concept:diastolic_blood_pressure') \
-            else plain.get(m['concept'], m['label'].lower())
+        name = 'blood pressure' if re.search(r'systolic|diastolic', m['concept'] + ' ' + m['label'], re.I) \
+            else plain.get(m['concept'], m['label'].lower().replace('_', ' '))
         if name not in names:
             names.append(name)
     return ', '.join(names[:-1]) + ' and ' + names[-1] if len(names) > 1 else names[0]
@@ -571,7 +721,7 @@ def questionnaire(steps):
             questions.append(s['ask'])
         elif s['key'] == 'medications':
             questions += s['asks']
-        elif s['key'] == 'exposures':
+        elif s['key'] in ('exposures', 'tailored', 'review'):
             questions += [i['ask'] for i in s['items']]
         elif s['key'] == 'symptoms':
             questions += [g['ask'] for g in s['groups']]
@@ -655,7 +805,8 @@ def load_facts(conn, patient, resource_ids):
         kind = 'symptom' if r['category'] == 'symptom_observation' else 'exposure'
         if reported:
             reports.append({'concept': r['concept_id'], 'label': label(r), 'kind': kind, 'reported': reported, 'assertion': r['assertion'],
-                            'scope': details.get('temporal_scope'), 'dated': bool(r['clinical_date'])})
+                            'scope': details.get('temporal_scope'), 'dated': bool(r['clinical_date']),
+                            'key': details.get('symptom_key') or details.get('exposure_key')})
         # A statement about the present ("constipation persists") describes the day it was made.
         day = r['clinical_date'] or (reported if details.get('temporal_scope') == 'current_state' else None)
         if day and r['assertion'] in ('present', 'absent'):
@@ -710,6 +861,15 @@ def load_facts(conn, patient, resource_ids):
             m = reported_measurements.setdefault(r['concept_id'], {'label': label(r), 'unit': r['unit'], 'dates': set()})
             m['dates'].add(r['clinical_date'])
             m['last'] = max(m['dates'])
+    tracking = []
+    for r in rows:
+        if r['category'] == 'check_in_tracking':
+            source = r['details'] or {}
+            d = source.get('details') or {}
+            tracking.append({'rid': r['resource_id'], 'kind': d['item_kind'], 'key': d['item_key'], 'action': d['action'], 'label': d['label'],
+                             'question': d.get('question'), 'value': d.get('setting_value'), 'reported_at': source.get('reported_at') or '',
+                             'reported': as_date(source.get('reported_local_date') or r['recorded_at'])})
     reported_dates = [as_date(d) for d in ((r['details'] or {}).get('reported_local_date') for r in rows) if d]
     return {'observations': observations, 'reports': reports, 'medications': list(medications.values()), 'series': series,
-            'concepts': concepts, 'reported_measurements': reported_measurements, 'last_reported': max(reported_dates, default=None)}
+            'concepts': concepts, 'reported_measurements': reported_measurements, 'last_reported': max(reported_dates, default=None),
+            'tracking': tracking}

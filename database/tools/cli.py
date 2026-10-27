@@ -181,9 +181,9 @@ def execute(conn,args):
         result=conn.execute('''SELECT pattern_id,method,exposure_key,exposure_label,outcome_key,outcome_label,direction,contributors,share_moderate_or_strong,median_effect,computed_at
           FROM health.pooled_patterns WHERE exposure_label ILIKE %s OR exposure_key ILIKE %s OR outcome_label ILIKE %s OR outcome_key ILIKE %s
           ORDER BY contributors DESC,share_moderate_or_strong DESC LIMIT %s''',(*['%'+args.concept+'%']*4,args.limit)).fetchall()
-    elif args.command=='check-in':
+    elif args.command in ('check-in','intake'):
         from datetime import date
-        from associations import check_in_plan, load_facts
+        from associations import check_in_plan, intake_plan, load_facts
         account=current_account()
         ids=[r['resource_id'] for r in conn.execute('SELECT resource_id FROM health.resources WHERE patient_id=%s AND is_current',(account.patient_id,))]
         found=conn.execute('SELECT association_id,method,strength,exposure_concept,exposure_label,outcome_concept,outcome_label FROM health.associations WHERE is_current AND patient_id=%s',(account.patient_id,)).fetchall()
@@ -191,7 +191,8 @@ def execute(conn,args):
         from datetime import datetime
         from zoneinfo import ZoneInfo
         today=date.fromisoformat(args.date) if args.date else datetime.now(ZoneInfo(account.timezone)).date()
-        result=check_in_plan(load_facts(conn,account.patient_id,ids),found,today,args.days)
+        facts=load_facts(conn,account.patient_id,ids)
+        result=check_in_plan(facts,found,today,args.days) if args.command=='check-in' else intake_plan(facts,found,today)
     elif args.command=='pooling':
         from associations import CONSENT_TEXT, CONSENT_VERSION, MIN_CONTRIBUTORS
         consent=conn.execute('SELECT opted_in,consent_version,updated_at FROM health.pooling_consent WHERE patient_id=%s',(current_account().patient_id,)).fetchone()
@@ -235,6 +236,8 @@ def main():
     pp=sub.add_parser('pooled-patterns',help='Patterns shared by at least five opted-in people. Aggregates only; never published');pp.add_argument('--concept',default='');pp.add_argument('--limit',type=int,default=100)
     ci=sub.add_parser('check-in',help='The morning check-in agenda, in order, built from this archive: urgent screen, measurements, sleep, workout, medications, exposures, symptoms and missed days')
     ci.add_argument('--date',help='Check-in date, YYYY-MM-DD; defaults to today');ci.add_argument('--days',type=int,default=14)
+    it=sub.add_parser('intake',help='The first-visit intake, or a catch-up for an existing archive, ending in an agreed daily tracking plan')
+    it.add_argument('--date',help='Intake date, YYYY-MM-DD; defaults to today')
     po=sub.add_parser('pooling',help='Show or change whether this chart contributes to pooled patterns')
     choice=po.add_mutually_exclusive_group();choice.add_argument('--opt-in',action='store_true');choice.add_argument('--opt-out',action='store_true')
     sub.add_parser('verify')

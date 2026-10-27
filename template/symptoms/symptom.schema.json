@@ -3470,6 +3470,218 @@
         "details"
       ],
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "record_type": {
+          "const": "check_in_tracking"
+        },
+        "patient_scope": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$",
+          "description": "The patient's record slug, from the patient profile."
+        },
+        "record_id": {
+          "type": "string",
+          "pattern": "^symrec_[0-9a-f]{24}$"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^narrative_[0-9a-f]{24}$"
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reported_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "report_timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA time zone of the report, from the patient profile."
+        },
+        "evidence_basis": {
+          "const": "patient_report"
+        },
+        "clinical_diagnosis": {
+          "type": "null"
+        },
+        "terminology_code": {
+          "type": "null"
+        },
+        "source_context": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source_path": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "quote": {
+                    "type": "string"
+                  },
+                  "start_char": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_char": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "quote",
+                  "start_char",
+                  "end_char"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "source_sha256",
+            "source_path",
+            "evidence"
+          ],
+          "additionalProperties": false
+        },
+        "details": {
+          "type": "object",
+          "description": "One change to what the daily check-in asks, agreed with the patient: start or stop tracking a measurement, exposure or symptom, add or drop a tailored question, or set a check-in preference. The current plan is the latest action per item_kind and item_key. Records are never rewritten; a later record changes the plan.",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "action": {
+              "enum": [
+                "track",
+                "stop"
+              ]
+            },
+            "item_kind": {
+              "enum": [
+                "measurement",
+                "exposure",
+                "symptom",
+                "question",
+                "setting"
+              ]
+            },
+            "item_key": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{1,80}$",
+              "description": "measurement: a concept slug such as body_weight, blood_pressure, heart_rate or blood_glucose. exposure: an exposure_key such as alcohol or caffeine. symptom: a symptom_key. question: a short slug for the question. setting: mode or check_in_time."
+            },
+            "question": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The exact question to ask, for a tailored question or a custom wording; otherwise null."
+            },
+            "setting_value": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "For a setting: mode is one_at_a_time or all_at_once; check_in_time is morning or evening. Otherwise null."
+            },
+            "proposed_by": {
+              "enum": [
+                "patient",
+                "assistant_approved_by_patient"
+              ]
+            },
+            "reason_source": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Why, in the patient's words or as the approved proposal stated it."
+            },
+            "related_record_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^symrec_[0-9a-f]{24}$"
+              }
+            },
+            "medication_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^med_[0-9a-f]{24}$"
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "label",
+            "action",
+            "item_kind",
+            "item_key",
+            "question",
+            "setting_value",
+            "proposed_by",
+            "reason_source",
+            "related_record_ids",
+            "medication_ids",
+            "notes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "record_type",
+        "patient_scope",
+        "record_id",
+        "record_key",
+        "report_id",
+        "reported_at",
+        "reported_local_date",
+        "report_timezone",
+        "evidence_basis",
+        "clinical_diagnosis",
+        "terminology_code",
+        "source_context",
+        "content_sha256",
+        "provenance",
+        "details"
+      ],
+      "additionalProperties": false
     }
   ],
   "$defs": {
