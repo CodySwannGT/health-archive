@@ -19,6 +19,7 @@ Each patient statement becomes reviewed records tied to verbatim quotes from the
    - `sleep_observation`: one night, with `occurrence` on the morning it ended. Hours slept as `value` in `h` (`computed_from_reported_times` when derived from stated bed and wake times), plus `awakenings`, `quality` and naps as stated; leave the rest null.
    - `reported_association`: `causality: not_established`.
    - `patient_hypothesis`: the patient's own explanation. Never a finding.
+   - `check_in_tracking`: one agreed change to what the daily check-in asks (`action` track or stop; `item_kind` measurement, exposure, symptom, question or setting). Record only what the patient asked for or approved, never a proposal they did not accept.
    - `measurement_context`, `exercise_session`, `care_preference`, `patient_context`.
 4. **Write the extraction:**
    ```json

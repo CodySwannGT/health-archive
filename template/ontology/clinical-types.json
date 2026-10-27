@@ -315,6 +315,14 @@
       "description": "Background history or circumstances the patient provides."
     },
     {
+      "clinical_type": "check_in_tracking",
+      "label": "Check-in tracking",
+      "parent": "patient_statement",
+      "fhir_resource": "Basic",
+      "concept_family": null,
+      "description": "What the patient agreed the daily check-in should ask, and how. A preference, never a clinical finding."
+    },
+    {
       "clinical_type": "patient_profile",
       "label": "Patient profile",
       "parent": null,

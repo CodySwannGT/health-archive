@@ -32,7 +32,8 @@ Record new patient statements with record_narrative or record_medication only af
 then read the facts back before saying they were saved. Capture user-facing conversation turns with capture_conversation.
 Drawing connections is the purpose: use associations for evidence-graded patterns in the person's own records, with
 competing explanations and pooled context, and say how strong each is. An association is never a cause or a diagnosis.
-Run the morning check-in with check_in; it asks about symptom-free and alcohol-free days too, because comparisons need explicit negatives.'''
+Run the morning check-in with check_in; it asks about symptom-free and alcohol-free days too, because comparisons need explicit negatives.
+When check_in reports intake_needed, run the intake first with intake.'''
 
 READ = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -247,6 +248,14 @@ def build(auth_provider=None, issuer_url=None):
         Follow the health-daily-check-in skill, never ask what an earlier answer settled, record every answer
         including "no", and never treat an unreported day as symptom-free."""
         return await _query('check-in', date=date, days=min(max(days, 1), 60))
+
+    @server.tool(annotations=READ)
+    async def intake(date: str | None = None) -> dict:
+        """The first-visit intake agenda: goals, current symptoms, medications, history, habits, home equipment, basics
+        and preferences, each with what the archive already knows so only gaps are asked. It ends with a proposed daily
+        tracking plan the person approves, recorded as check_in_tracking records. check_in reports intake_needed until
+        a plan exists. Follow the health-intake skill."""
+        return await _query('intake', date=date)
 
     @server.tool(annotations=READ)
     async def pooling() -> dict:

@@ -114,6 +114,15 @@ def main():
                 raise ValueError('A no-workout report has no modality or duration')
             if d['status'] == 'completed_reported' and d['modality'] is None:
                 raise ValueError('A completed workout needs its modality')
+        if record['record_type'] == 'check_in_tracking':
+            d = record['details']
+            if (d['item_kind'] == 'setting') != (d['setting_value'] is not None):
+                raise ValueError('A check-in setting, and only a setting, has a setting value')
+            settings = {'mode': ('one_at_a_time', 'all_at_once'), 'check_in_time': ('morning', 'evening')}
+            if d['item_kind'] == 'setting' and d['setting_value'] not in settings.get(d['item_key'], ()):
+                raise ValueError('Unknown check-in setting or value')
+            if d['item_kind'] == 'question' and d['action'] == 'track' and not d['question']:
+                raise ValueError('A tailored question needs its exact wording')
         if record['record_type'] == 'symptom_observation' and record['details'].get('stool_form') and record['details']['assertion'] != 'present':
             raise ValueError('A stool form describes a symptom that is present')
         if record['record_type'] == 'exercise_routine':
@@ -163,7 +172,7 @@ def main():
     for filename, kind in [("observations.jsonl", "symptom_observation"), ("patterns.jsonl", "recurring_pattern"),
                            ("exposures.jsonl", "reported_exposure"), ("associations.jsonl", "reported_association"),
                            ("hypotheses.jsonl", "patient_hypothesis"), ("medication-responses.jsonl", "medication_response"),
-                           ("care-preferences.jsonl", "care_preference"), ("exercise-routines.jsonl", "exercise_routine"), ("anthropometrics.jsonl", "anthropometric_measurement"), ("body-composition.jsonl", "body_composition_measurement"), ("demographics.jsonl", "patient_demographics"), ("measurement-contexts.jsonl", "measurement_context"), ("vital-signs.jsonl", "vital_sign_measurement"), ("sleep.jsonl", "sleep_observation")]:
+                           ("care-preferences.jsonl", "care_preference"), ("exercise-routines.jsonl", "exercise_routine"), ("anthropometrics.jsonl", "anthropometric_measurement"), ("body-composition.jsonl", "body_composition_measurement"), ("demographics.jsonl", "patient_demographics"), ("measurement-contexts.jsonl", "measurement_context"), ("vital-signs.jsonl", "vital_sign_measurement"), ("sleep.jsonl", "sleep_observation"), ("check-in-tracking.jsonl", "check_in_tracking")]:
         save(ROOT / filename, "".join(canonical(r) + "\n" for r in all_records if r["record_type"] == kind))
     inventory = json.loads((ROOT / "inventory.json").read_text()) if (ROOT / "inventory.json").exists() else {"schema_version": "1.0", "patient_scope": scope, "reports": []}
     if not any(r["report_id"] == report_id for r in inventory["reports"]):

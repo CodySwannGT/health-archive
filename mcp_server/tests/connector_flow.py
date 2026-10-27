@@ -32,7 +32,7 @@ init, body = c.initialize()
 check('MCP initialize with bearer token', init.status_code == 200 and body['result']['serverInfo']['name'] == 'health-archive')
 _, listed = c.rpc('tools/list', {})
 names = {t['name'] for t in listed['result']['tools']}
-check('tools listed', {'search', 'fetch', 'vitals', 'record_narrative', 'capture_conversation', 'ontology', 'associations', 'check_in', 'pooled_patterns', 'set_pooling'} <= names)
+check('tools listed', {'search', 'fetch', 'vitals', 'record_narrative', 'capture_conversation', 'ontology', 'associations', 'check_in', 'intake', 'pooled_patterns', 'set_pooling'} <= names)
 result, status = c.call('status', {})
 check('status reports the signed-in patient', not result.get('isError') and status['patient_id'].startswith('pat_'))
 result, found = c.call('search', {'query': 'weight'})

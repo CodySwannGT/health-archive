@@ -28,7 +28,7 @@ PostgreSQL 16 with Apache AGE and pgvector, the system of record for every patie
 | `put`, `retire`, `export` | Store, retire or export archive files |
 | `ingest`, `verify` | Reproject the patient's archive; verify archive, projections, ontology, graph and isolation |
 | `search`, `labs`, `medications`, `symptoms`, `vitals`, `anthropometrics`, `activity`, `profile`, `timeline`, `record`, `document`, `graph`, `ontology`, `concepts`, `concept`, `query` | Read-only queries. `concept body_weight` returns one concept's records from every source as a series |
-| `associations`, `check-in`, `pooled-patterns`, `pooling` | Connections, the daily check-in plan, pooled patterns and consent status. `pooling --opt-in` or `--opt-out` changes consent |
+| `associations`, `check-in`, `intake`, `pooled-patterns`, `pooling` | Connections, the daily check-in plan, the first-visit intake, pooled patterns and consent status. `pooling --opt-in` or `--opt-out` changes consent |
 
 Writes take a per-patient advisory lock. They materialize the patient's current archive into a private workspace, apply the change, then store new versions and reproject records, resources, graph and embeddings in one transaction. A local checkout is read only by an explicit `put`. Embeddings are computed locally with `BAAI/bge-small-en-v1.5`, so no health text is sent to an embedding service.
 
@@ -47,6 +47,8 @@ The SQL migrations in `sql/` are idempotent and run in order on bootstrap and on
 A report that a symptom is present or absent right now (`temporal_scope` `current_state`) without an occurrence date counts for the day it was reported. Workouts (`concept:derived:workout`, minutes summed per day) and short sleep (`concept:derived:short_sleep`, under 7 hours, the American Academy of Sleep Medicine's adult minimum) are exposures the engine derives from exercise and sleep reports.
 
 `check-in` returns the morning agenda in order: urgent screen, open question, measurements tracked in the last 30 days, sleep, yesterday's workout, medication changes and as-needed doses, drinks for anyone who reported drinking in the last 90 days, symptoms, missed days and read-back. Symptoms come from open associations and from active symptoms: reported as ongoing within 60 days, not tied to one day, and not reported gone since. Each carries its last state, so a symptom present last time asks when it stopped. Today is the patient's local date.
+
+The patient's tracking plan shapes the agenda. Each `check_in_tracking` record starts or stops one measurement, exposure, symptom or tailored question, or sets a preference (`mode`, `check_in_time`). The latest record per item wins. Until a plan exists, `check-in` reports `intake_needed`, and `intake` returns the first-visit agenda: goals, symptoms, medications, history, habits, home equipment, basics and preferences, each with what the archive already knows. Missed days count only from the patient's first report. A month after the last plan change, a review asks whether to stop tracking symptoms absent for a month, and whether to track anything for medications started since.
 
 Strength is `insufficient`, `weak`, `moderate` or `strong` by sample size, effect size and consistency, and an on-off-on reversal is the strongest series evidence. Every association lists the other exposures it was compared with, ranked, and its limitations. `DERIVED_ASSOCIATION` graph edges link the exposure and outcome concepts of every association that is not insufficient.
 

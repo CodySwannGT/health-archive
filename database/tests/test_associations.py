@@ -4,7 +4,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from associations import SHORT_SLEEP, WORKOUT, check_in_plan, daily, find_associations, fisher_greater, pool_key, pooled_patterns, slope_per_week
+from associations import SHORT_SLEEP, WORKOUT, check_in_plan, daily, intake_plan, find_associations, fisher_greater, pool_key, pooled_patterns, slope_per_week
 
 D = lambda day: date(2026, 10, day)
 
@@ -164,6 +164,65 @@ class PoolingTest(unittest.TestCase):
         self.assertEqual(pool_key('concept:name:medication:linzess', 'source_name', 'medication', 'Linzess', 'linaclotide'), 'medication:linaclotide')
         self.assertEqual(pool_key('concept:name:medication:tb-500', 'source_name', 'medication', 'TB-500'), 'medication:tb-500')
         self.assertEqual(pool_key('x', 'source_code', 'medication', 'anastrozole (ARIMIDEX) 1 mg tablet'), 'medication:anastrozole')
+
+
+def tracking(n, kind, key, action, day, label=None, question=None, value=None):
+    return {'rid': f't{n}', 'kind': kind, 'key': key, 'action': action, 'label': label or key.replace('_', ' '), 'question': question,
+            'value': value, 'reported_at': f'2026-10-{day:02d}T12:00:{n:02d}Z', 'reported': D(day)}
+
+
+def empty_facts():
+    return {'observations': [], 'reports': [], 'medications': [], 'series': {}, 'concepts': {}, 'reported_measurements': {}, 'tracking': []}
+
+
+class TrackingPlanTest(unittest.TestCase):
+    def steps(self, facts, today=D(24)):
+        plan = check_in_plan(facts, find_associations(facts), today, window=14)
+        return plan, {s['key']: s for s in plan['steps']}
+
+    def test_a_new_patient_needs_an_intake_and_has_no_missed_days(self):
+        plan, steps = self.steps(empty_facts())
+        self.assertTrue(plan['intake_needed'])
+        self.assertNotIn('missed_days', steps)
+        self.assertNotIn('measurements', steps)
+        intake = intake_plan(empty_facts(), [], D(24))
+        self.assertFalse(intake['catch_up'])
+        self.assertEqual([s['key'] for s in intake['sections']][-1], 'tracking_plan')
+        self.assertEqual(len(intake['questionnaire']), 8)
+
+    def test_the_plan_adds_and_removes_what_the_check_in_asks(self):
+        facts = swelling_facts()
+        facts['reports'] = [{'concept': 'concept:symptom:swelling', 'label': 'Swelling', 'kind': 'symptom', 'reported': D(22),
+                             'assertion': 'present', 'key': 'swelling_feet'}]
+        facts['tracking'] = [
+            tracking(1, 'measurement', 'blood_pressure', 'track', 20, 'Blood pressure'),
+            tracking(2, 'exposure', 'caffeine', 'track', 20, 'Caffeine', 'How many cups of coffee or energy drinks did you have yesterday?'),
+            tracking(3, 'question', 'appetite', 'track', 20, 'Appetite', 'How was your appetite yesterday, from 0 (none) to 10 (normal)?'),
+            tracking(4, 'setting', 'mode', 'track', 20, 'Mode', value='all_at_once'),
+            tracking(5, 'symptom', 'swelling_feet', 'track', 20, 'Swelling'),
+            tracking(6, 'symptom', 'swelling_feet', 'stop', 21, 'Swelling'),
+            tracking(7, 'exposure', 'alcohol', 'stop', 21, 'Alcohol intake'),
+        ]
+        plan, steps = self.steps(facts)
+        self.assertFalse(plan['intake_needed'])
+        self.assertEqual(plan['preferences']['mode'], 'all_at_once')
+        self.assertEqual(steps['measurements']['ask'], 'What was your blood pressure this morning?')
+        self.assertEqual([i['ask'] for i in steps['exposures']['items']], ['How many cups of coffee or energy drinks did you have yesterday?'])
+        self.assertEqual(steps['tailored']['items'][0]['key'], 'appetite')
+        # Stopped by the patient, so not asked even though it is in an association.
+        self.assertNotIn('symptoms', steps)
+        self.assertTrue(any('appetite' in q for q in plan['questionnaire']))
+
+    def test_a_review_comes_a_month_after_the_last_plan_change(self):
+        facts = swelling_facts()
+        facts['reports'] = [{'concept': 'concept:key:symptom:night_sweats', 'label': 'night sweats', 'kind': 'symptom', 'reported': D(1),
+                             'assertion': 'absent', 'key': 'night_sweats'}]
+        facts['tracking'] = [tracking(1, 'symptom', 'night_sweats', 'track', 1)]
+        facts['medications'].append(medication('concept:medication:retatrutide', 'Retatrutide', 'active', D(10)))
+        self.assertNotIn('review', self.steps(facts, D(24))[1])
+        review = self.steps(facts, date(2026, 11, 3))[1]['review']['items']
+        self.assertEqual([i['concept'] for i in review], ['concept:key:symptom:night_sweats', 'concept:medication:retatrutide'])
+        self.assertIn('stop asking', review[0]['ask'])
 
 
 class CheckInTest(unittest.TestCase):
