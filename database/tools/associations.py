@@ -489,6 +489,10 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
         label = item['label']
         text = concept + ' ' + label
         observed = bool(OBSERVED_PATTERN.search(text))
+        rated = max((o for o in facts['observations'] if o['concept'] == concept and o['assertion'] == 'present' and o.get('severity') is not None),
+                    key=lambda o: o['date'], default=None)
+        # A symptom present within the last two days stopped since the last check-in; asking when is asking what the record already says.
+        ask_stop = state == 'present' and (today - day).days > 2
         symptom_items.append({
             'concept': concept, 'label': label, 'reasons': sorted(item['reasons']), 'association_count': len(item['associations']),
             'last_state': state, 'last_state_date': day.isoformat() if day else None,
@@ -496,10 +500,13 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
             # A red-flag symptom is asked once, in the urgent screen.
             'asked_in_urgent_screen': bool(RED_FLAG_PATTERN.search(text)),
             'severity': not observed,
+            # The last rating, so the trend is computed, never asked: the patient already gave it.
+            'last_severity': {'value': rated['severity'], 'date': rated['date'].isoformat()} if rated else None,
+            'ask_when_stopped': ask_stop,
             'ask': item.get('question') or f'Do you still have {label.lower()}?',
             'if_yes': 'Ask when it last happened (last night, this morning, all day).' if observed else
-                      'Ask when (last night, this morning, all day), severity 0 to 10, and better, same or worse than last time.',
-            'if_no': 'Ask when it stopped, and record it as absent from that day.' if state == 'present'
+                      'Ask when (last night, this morning, all day) and severity 0 to 10. Never ask whether it is better or worse: compare with last_severity yourself.',
+            'if_no': 'Ask when it stopped, and record it as absent from that day.' if ask_stop
                      else 'Record it as absent today.'})
     symptom_items.sort(key=lambda i: i['label'])
     symptom_items.sort(key=lambda i: i['last_state_date'] or '', reverse=True)
@@ -521,10 +528,10 @@ def check_in_plan(facts, associations, today, window=14, active_days=60):
         ask = (f'How have your bowel movements been since {since_text}? How many, and which Bristol type (1 to 7)? Any of these: {names}?'
                if key == 'bowel' else f'Any of these since {since_text}: {names}?')
         felt = [i['label'].lower() for i in members if i['severity']]
-        stopped = [i['label'].lower() for i in members if i['last_state'] == 'present']
+        stopped = [i['label'].lower() for i in members if i['ask_when_stopped']]
         groups.append({'key': key, 'ask': ask, 'items': [i['concept'] for i in members], 'bristol': bristol,
                        'follow_up': ' '.join(filter(None, [
-                           f"For any of {', '.join(felt)} they have: severity 0 to 10, and better, same or worse." if felt else '',
+                           f"For any of {', '.join(felt)} they have: severity 0 to 10 (compare with last_severity yourself; never ask better or worse)." if felt else '',
                            f"For any of {', '.join(stopped)} that is gone: when it stopped." if stopped else '',
                            'Record each listed item as present or absent; ask only what the answer left open.']))})
 
@@ -728,8 +735,13 @@ def questionnaire(steps):
             for i in s['items']:
                 if i['group'] or i['asked_in_urgent_screen']:
                     continue
-                yes = 'when' if not i['severity'] else 'when, severity 0 to 10, and better, same or worse'
-                questions.append(f"{i['ask']} If yes: {yes}." + (' If not: when did it stop?' if i['last_state'] == 'present' else ''))
+                yes = 'when' if not i['severity'] else 'when, and severity 0 to 10'
+                last, day = i['last_severity'], i['last_state_date'] and date.fromisoformat(i['last_state_date'])
+                rated = last and date.fromisoformat(last['date'])
+                # The latest state, so the question shows what the record holds instead of asking for it again.
+                was = (f' (none on {day:%b} {day.day})' if i['last_state'] == 'absent' else
+                       f" (last time: {last['value']}/10 on {rated:%b} {rated.day})" if last and i['severity'] else '')
+                questions.append(f"{i['ask']}{was} If yes: {yes}." + (' If not: when did it stop?' if i['ask_when_stopped'] else ''))
     return [f'{n}. {q}' for n, q in enumerate(questions, 1)]
 
 
@@ -814,7 +826,8 @@ def load_facts(conn, patient, resource_ids):
             observations.append({'rid': r['resource_id'], 'concept': r['concept_id'], 'label': label(r), 'family': r['family'],
                                  'kind': kind, 'date': day, 'assertion': r['assertion'],
                                  'date_basis': 'occurrence' if r['clinical_date'] else 'current_state_on_report_date',
-                                 'amount': amount.get('value') if isinstance(amount.get('value'), (int, float)) else None})
+                                 'amount': amount.get('value') if isinstance(amount.get('value'), (int, float)) else None,
+                                 'severity': (details.get('numeric_severity') or {}).get('value')})
     # Workouts and short nights are exposures the engine derives from activity and sleep reports.
     for r in rows:
         details = ((r['details'] or {}).get('details') or {})

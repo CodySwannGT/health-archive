@@ -245,14 +245,30 @@ class CheckInTest(unittest.TestCase):
         self.assertIn('Do you want to fill', steps['missed_days']['ask'])
         self.assertEqual(steps['missed_days']['days'], ['2026-10-23'])
 
-    def test_a_symptom_present_last_time_asks_when_it_stopped(self):
+    def test_when_a_symptom_stopped_is_asked_only_after_a_gap(self):
         facts = swelling_facts()
         facts['observations'].append(observation('s23', 'concept:symptom:swelling', 'symptom', 23, 'present', label='Swelling'))
         swelling = self.plan(facts)['symptoms']['items'][0]
         self.assertEqual((swelling['last_state'], swelling['last_state_date']), ('present', '2026-10-23'))
+        # Present yesterday and gone today stopped since then: the record already says when.
+        self.assertFalse(swelling['ask_when_stopped'])
+        self.assertEqual(swelling['if_no'], 'Record it as absent today.')
+        swelling = self.plan(facts, today=D(27))['symptoms']['items'][0]
+        self.assertTrue(swelling['ask_when_stopped'])
         self.assertIn('when it stopped', swelling['if_no'])
         dry = self.plan()['symptoms']['items'][0]
         self.assertEqual(dry['if_no'], 'Record it as absent today.')
+
+    def test_the_last_rating_is_given_so_better_or_worse_is_never_asked(self):
+        facts = swelling_facts()
+        facts['observations'] += [dict(observation('s20', 'concept:symptom:swelling', 'symptom', 20, 'present', label='Swelling'), severity=4),
+                                  dict(observation('s23', 'concept:symptom:swelling', 'symptom', 23, 'present', label='Swelling'), severity=7)]
+        plan = check_in_plan(facts, find_associations(facts), D(24), window=5)
+        swelling = next(s for s in plan['steps'] if s['key'] == 'symptoms')['items'][0]
+        self.assertEqual(swelling['last_severity'], {'value': 7, 'date': '2026-10-23'})
+        self.assertNotIn('better', swelling['if_yes'].split('Never')[0])
+        self.assertFalse(any('better, same or worse' in q for q in plan['questionnaire']))
+        self.assertTrue(any('(last time: 7/10 on Oct 23)' in q for q in plan['questionnaire']))
 
     def test_active_symptoms_without_dated_reports_are_asked_about(self):
         facts = swelling_facts()
@@ -313,7 +329,7 @@ class CheckInTest(unittest.TestCase):
         facts['observations'].append(observation('h23', 'concept:key:symptom:headache', 'symptom', 23, 'present', label='headache'))
         items = {i['label']: i for i in self.plan(facts)['symptoms']['items']}
         self.assertIn('headache', items)
-        self.assertIn('when it stopped', items['headache']['if_no'])
+        self.assertEqual(items['headache']['if_no'], 'Record it as absent today.')
 
     def test_measurements_and_drinks_are_asked_only_when_tracked(self):
         facts = swelling_facts()

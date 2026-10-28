@@ -25,6 +25,7 @@ Users tire fast, and a repeated question also invites inconsistent answers.
 - Before each question, check what earlier answers already settled. If an answer covers a later item, don't ask it; include it in the read-back for them to confirm. For example, Bristol type 6 already says the stool wasn't watery, and "no black stool" in the urgent screen already answers the dark-stool symptom.
 - Ask each symptom group in `groups` as its one question, with the Bristol type once. Then ask only what the answer left open, per the group's `follow_up`.
 - An item marked `asked_in_urgent_screen` is answered by the urgent screen. Don't ask it again.
+- Don't ask the user for what their records already say. The trend comes from `last_severity`, and when a symptom stopped is asked only where `ask_when_stopped` is true.
 - Ask 0 to 10 severity only where `severity` is true. Things seen rather than felt, such as stool shape or urine color, get yes or no and when.
 
 ## Pace
@@ -42,9 +43,11 @@ Between questions, make no tool call except `capture_conversation` for the turn 
 7. **Medications.** Two questions: anything added, changed or stopped since the last check-in, and any as-needed medications taken since then. Holds and restarts are changes.
 8. **Exposures.** Only those listed, such as yesterday's drinks.
 9. **Symptoms.** First each group in `groups` as one question, such as all bowel symptoms with one Bristol type (1 separate hard lumps, 2 lumpy sausage, 3 cracked sausage, 4 smooth sausage, 5 soft blobs, 6 mushy, 7 liquid). Then each remaining item, one at a time: "Do you still have …?"
-   - Yes: when (last night, this morning, all day). Where `severity` is true, also 0 to 10, and better, same or worse.
-   - No, and it was present last time (`if_no` says so): "When did it stop?"
+   - Yes: when (last night, this morning, all day). Where `severity` is true, also 0 to 10.
+   - No, and `ask_when_stopped` is true: "When did it stop?"
    - No otherwise: a plain no for today.
+
+   Never ask whether something is better, the same or worse, or anything else the records already hold, such as last night's rating or when a symptom last happened. Compare today's rating with `last_severity` yourself and say it in the read-back, for example "night sweats 3/10, down from 7 on Oct 26".
 10. **Tailored questions.** Each item in `tailored`, worded exactly as given.
 11. **Missed days.** First ask whether they want to fill them in; they may not remember. Only on yes, ask about the days and items they recall.
 12. **Review**, when `review` is present: ask each item. Record each agreed change as a `check_in_tracking` record.
