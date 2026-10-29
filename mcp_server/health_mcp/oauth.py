@@ -126,8 +126,20 @@ class HealthOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
           JOIN health_oauth.accounts a USING(user_id) WHERE t.token_sha256=%s AND t.kind=%s AND NOT t.revoked AND NOT a.disabled
           {'AND t.client_id=%s' if client_id else ''}''', (sha(token), kind, *([client_id] if client_id else []))).fetchone()
 
+    def _refreshable(self, conn, token, client_id):
+        """A refresh token that may still be exchanged: one of the two most recent in its family, while the latest is unused.
+
+        The previous token stays valid until the new one is used, so a client whose
+        processes share a sign-in, and one of them kept the older token, is not signed out."""
+        return conn.execute('''SELECT t.scopes,t.resource,t.expires_at,t.client_id,t.user_id,t.family FROM health_oauth.tokens t
+          JOIN health_oauth.accounts a USING(user_id) WHERE t.token_sha256=%s AND t.kind='refresh' AND t.client_id=%s AND NOT a.disabled
+          AND t.token_sha256 IN (SELECT r.token_sha256 FROM health_oauth.tokens r WHERE r.family=t.family AND r.kind='refresh'
+                                 ORDER BY r.created_at DESC LIMIT 2)
+          AND NOT (SELECT r.revoked FROM health_oauth.tokens r WHERE r.family=t.family AND r.kind='refresh' ORDER BY r.created_at DESC LIMIT 1)''',
+                            (sha(token), client_id)).fetchone()
+
     async def load_refresh_token(self, client, refresh_token):
-        row = await self._db(lambda c: self._active(c, refresh_token, 'refresh', client.client_id))
+        row = await self._db(lambda c: self._refreshable(c, refresh_token, client.client_id))
         if not row or row['expires_at'] < time.time():
             return None
         return RefreshToken(token=refresh_token, client_id=client.client_id, scopes=row['scopes'], expires_at=row['expires_at'],
@@ -135,12 +147,15 @@ class HealthOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
 
     async def exchange_refresh_token(self, client, refresh_token, scopes):
         def run(conn):
-            row = conn.execute("UPDATE health_oauth.tokens SET revoked=true WHERE token_sha256=%s AND kind='refresh' AND NOT revoked RETURNING family,user_id",
-                               (sha(refresh_token.token),)).fetchone()
+            row = self._refreshable(conn, refresh_token.token, client.client_id)
             if not row:
                 raise TokenError('invalid_grant', 'refresh token is no longer valid')
-            # Rotation: the old refresh token and its access tokens stop working.
-            conn.execute("UPDATE health_oauth.tokens SET revoked=true WHERE family=%s AND kind='access'", (row['family'],))
+            # One exchange per family at a time, so two concurrent refreshes cannot both leave a live token.
+            conn.execute('SELECT pg_advisory_xact_lock(hashtext(%s))', ('health_oauth_family:' + row['family'],))
+            if not self._refreshable(conn, refresh_token.token, client.client_id):
+                raise TokenError('invalid_grant', 'refresh token is no longer valid')
+            # Rotation: every earlier token of the family stops working.
+            conn.execute('UPDATE health_oauth.tokens SET revoked=true WHERE family=%s AND NOT revoked', (row['family'],))
             return self._issue(conn, client.client_id, scopes or refresh_token.scopes, refresh_token.resource, row['family'], row['user_id'])
         return await self._db(run)
 

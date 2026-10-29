@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "health-archive",
   "displayName": "Health Archive",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Source-backed personal health archive for each signed-in user: query labs, medications, symptoms and vitals, and record quote-backed reports through an OAuth MCP connector.",
   "author": {
     "name": "Cody Swann",

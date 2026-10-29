@@ -9,7 +9,7 @@ The health archive database is the system of record. Each signed-in person sees 
 
 ## Tools
 
-Use the `health-archive` MCP tools. In a local checkout, the `healthdb` command has the same names.
+Use the `health-archive` MCP tools. If the `health-archive` tools are missing, the connector is signed out or unreachable. Stop and tell the user so, with the fix: in Codex, run `codex mcp login health-archive` and start a new session; in Claude or ChatGPT, reconnect the connector in settings. Never work around it with the `healthdb` command or a repository checkout. Those are developer tools, and a conversation run through them is not archived.
 
 | Question | Tool |
 | --- | --- |

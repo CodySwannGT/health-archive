@@ -35,7 +35,7 @@ Each patient statement becomes reviewed records tied to verbatim quotes from the
    - List what was not reported in `unknowns`. Never invent values, clinical codes or diagnoses.
 5. **Dry run**, then record:
    - Connector: `record_narrative` with `source_name` (a stable kebab-case name such as `2026-10-24-weight-bp-pulse`), `source_text`, `extraction` and `dry_run: true`, then the same call without `dry_run`.
-   - Local: `healthdb record-narrative SOURCE.txt EXTRACTION.json --dry-run`, then without `--dry-run`.
+   - Developers in a local checkout only: `healthdb record-narrative SOURCE.txt EXTRACTION.json --dry-run`, then without `--dry-run`.
 6. **Read back** with `vitals`, `anthropometrics`, `symptoms` or `get_record`. Confirm dates and values before telling the user the facts were saved.
 
 A correction to an already-recorded source uses `revise: true` (`--revise`). Prior versions are kept. A new day's report is a new source, never a revision.
