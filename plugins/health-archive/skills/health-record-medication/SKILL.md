@@ -30,5 +30,5 @@ Medication reports are supplemental patient-reported rows. Each has a stable med
 1. Build the row without `provenance` or `content_sha256`, plus `evidence_quotes` (verbatim strings that each occur once in the source) and `reported_at` (the ISO 8601 time, with offset, when the patient said it). Match the `meds/medication.schema.json` branch for the type. Use `get_record` on an existing row of the same type as a template.
 2. Dry run, then record:
    - Connector: `record_medication` with `report` (a folder name such as `2026-10-24-dose-change`), `source_text`, `row` and `dry_run: true`, then the same call without `dry_run`.
-   - Local: `healthdb record-medication SOURCE.txt ROW.json --report NAME --dry-run`, then without `--dry-run`.
+   - Developers in a local checkout only: `healthdb record-medication SOURCE.txt ROW.json --report NAME --dry-run`, then without `--dry-run`.
 3. Read back with `medications` and `changes: true`.

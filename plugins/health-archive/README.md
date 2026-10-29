@@ -20,7 +20,7 @@ The server implements the MCP authorization specification:
 - authorization server metadata;
 - dynamic client registration;
 - authorization code with PKCE S256;
-- refresh token rotation;
+- refresh token rotation, where the previous refresh token works once until the new one is used, so a client with several processes is not signed out;
 - RFC 7009 revocation.
 
 Clients discover this automatically. On first connection your browser opens a sign-in page that shows the requesting client and where it will return. Sign in with your username and password, or create an account with an invitation from the operator. Each account owns one patient chart, and tools act only on it. Five failed sign-ins lock that username for 15 minutes.

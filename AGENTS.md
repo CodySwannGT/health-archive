@@ -2,6 +2,8 @@
 
 These rules apply to agents working in a health archive built from this code: through the MCP connector, the plugin's skills or the `healthdb` command.
 
+A user's health conversation goes through the MCP connector. If its tools are missing, tell the user it is signed out and how to sign in again. Never fall back to `healthdb`, which is for developing this code.
+
 ## Durable conversation audit trail
 
 Preserve the whole health conversation and build a durable, source-backed audit trail. Capturing only selected facts, or keeping information only in chat context, is not enough.

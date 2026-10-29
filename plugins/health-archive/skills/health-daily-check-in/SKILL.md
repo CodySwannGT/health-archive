@@ -7,7 +7,7 @@ description: Run the user's morning health check-in like a careful triage nurse,
 
 Treat the check-in as a short daily visit with a good triage nurse: safety first, one question at a time, every answer anchored in time, and nothing interpreted until the end. It should take three to five minutes, and never ask the same thing twice.
 
-Call `check_in` first.
+Call `check_in` first. If it isn't available, follow the health-archive-grounding skill: tell the user the connector is signed out and how to sign in again, and don't start the check-in.
 - If `intake_needed` is true, the person has no agreed plan yet. Run the `health-intake` skill instead, then today's check-in only if they want it.
 - Otherwise it returns the steps in order: a standard core, plus everything their plan and records add (measurements from their equipment, the habits they track, their symptoms with what each was last time, tailored questions, and days with no check-in). Follow it. Skip nothing it includes and add nothing it leaves out, apart from follow-ups on what the user raises.
 - Every daily question comes from the plan, so it is asked the same way every day. Never improvise a new daily question. Propose it instead (see "Changing the plan").
