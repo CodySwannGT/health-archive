@@ -56,8 +56,8 @@ class Connector:
     def sign_in(self, username, password):
         return self.http.post(self.issuer + '/oauth/consent', data={**self.form, 'username': username, 'password': password, 'decision': 'approve'})
 
-    def sign_up(self, invite, username, password, display_name, timezone='America/Chicago'):
-        return self.http.post(self.issuer + '/oauth/signup', data={**self.form, 'invite': invite, 'username': username, 'display_name': display_name,
+    def sign_up(self, username, password, display_name, timezone='America/Chicago'):
+        return self.http.post(self.issuer + '/oauth/signup', data={**self.form, 'username': username, 'display_name': display_name,
                                                                    'timezone': timezone, 'password': password, 'confirm': password})
 
     def code_from(self, response):
@@ -103,11 +103,11 @@ class Connector:
             return result, None
         return result, result.get('structuredContent') or json.loads(result['content'][0]['text'])
 
-    def connect(self, client_name, username=None, password=None, invite=None, display_name=None):
+    def connect(self, client_name, username=None, password=None, sign_up=False, display_name=None):
         """Register, authorize, sign in or sign up, exchange the code and initialize."""
         self.register(client_name)
         self.start_authorization()
-        response = self.sign_up(invite, username, password, display_name) if invite else self.sign_in(username, password)
+        response = self.sign_up(username, password, display_name) if sign_up else self.sign_in(username, password)
         code = self.code_from(response)
         if not code:
             raise SystemExit(f'authorization failed: {response.status_code} {response.text[:300]}')

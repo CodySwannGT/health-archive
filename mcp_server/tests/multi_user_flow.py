@@ -1,33 +1,32 @@
-"""Multi-user isolation check against a test server: invitation sign-up, a new
+"""Multi-user isolation check against a test server: open sign-up, a new
 patient archive per account, and no cross-account reads or writes.
 
-    HEALTH_MCP_TEST_INVITES=file-with-two-invites python multi_user_flow.py http://127.0.0.1:8765
+    python multi_user_flow.py http://127.0.0.1:8765
 Use only against an isolated test database: it creates two accounts.
 """
 import json
-import os
-from pathlib import Path
 import secrets
 import sys
 
 from flow import Connector, check, results
 
 base = sys.argv[1]
-invites = Path(os.environ['HEALTH_MCP_TEST_INVITES']).read_text().split()
 suffix = secrets.token_hex(3)
 people = [('alice_' + suffix, 'Alice Example', 71), ('bob_' + suffix, 'Bob Example', 88)]
 password = 'correct horse ' + secrets.token_hex(6)
 
 probe = Connector(base).discover()
-probe.register('Invitation probe')
+probe.register('Sign-up probe')
 probe.start_authorization()
-bad = probe.sign_up('inv-not-a-real-invitation', 'mallory_' + suffix, password, 'Mallory')
-check('sign-up without a valid invitation is refused', bad.status_code == 200 and 'invitation' in bad.text.lower())
+page = probe.http.get(probe.consent_url)
+check('sign-in page offers sign-up without an invitation', 'Create an account</a>' in page.text and 'invitation' not in page.text.lower())
+weak = probe.sign_up('mallory_' + suffix, 'short', 'Mallory')
+check('sign-up with a short password is refused', weak.status_code == 200 and 'at least' in weak.text)
 
 sessions = {}
-for (username, name, pulse), invite in zip(people, invites):
+for username, name, pulse in people:
     c = Connector(base).discover()
-    c.connect(f'{name} client', username, password, invite=invite, display_name=name)
+    c.connect(f'{name} client', username, password, sign_up=True, display_name=name)
     result, status = c.call('status', {})
     check(f'{username}: sign-up creates a separate patient chart', not result.get('isError') and status['patient_scope'] == username)
     result, onto = c.call('ontology', {})
@@ -66,4 +65,9 @@ result, scoped = bob.call('record_narrative', {'source_name': 'scope-test', 'sou
 check("bob cannot write with alice's patient scope", result.get('isError'))
 result, vitals = alice.call('vitals', {})
 check("alice's archive is unchanged by bob", [r['numeric_value'] for r in vitals['results']] == [people[0][2]])
+# Three sign-ups per address per hour: alice and bob used two.
+extra = Connector(base).discover(); extra.register('Third account'); extra.start_authorization()
+check('a third sign-up from one address is allowed', extra.sign_up('carol_' + suffix, password, 'Carol').status_code == 302)
+extra = Connector(base).discover(); extra.register('Fourth account'); extra.start_authorization()
+check('a fourth sign-up from one address within the hour is refused', extra.sign_up('dave_' + suffix, password, 'Dave').status_code == 429)
 print(json.dumps({'passed': sum(results.values()), 'total': len(results)}))

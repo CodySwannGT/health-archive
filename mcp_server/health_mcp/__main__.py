@@ -2,8 +2,6 @@
 
     python -m health_mcp serve                      Streamable HTTP with OAuth, for connectors
     python -m health_mcp stdio                      Local stdio as the local profile's account
-    python -m health_mcp invite [--days N] [--note TEXT] [--out FILE]
-                                                    Create a one-time sign-up invitation
     python -m health_mcp bind-account USERNAME USER_ID < password-hash
                                                     Give an existing user a sign-in account
     python -m health_mcp hash-password < password   Print a scrypt hash for bind-account
@@ -81,10 +79,6 @@ def main():
     s.add_argument('--host', default=os.environ.get('HOST', '0.0.0.0'))
     s.add_argument('--port', type=int, default=int(os.environ.get('PORT', '8080')))
     sub.add_parser('stdio')
-    i = sub.add_parser('invite')
-    i.add_argument('--days', type=int, default=14)
-    i.add_argument('--note')
-    i.add_argument('--out', type=Path, help='Write the invitation to this file instead of printing it')
     b = sub.add_parser('bind-account')
     b.add_argument('username')
     b.add_argument('user_id')
@@ -94,17 +88,6 @@ def main():
         serve(args.host, args.port)
     elif args.command == 'stdio':
         build().run('stdio')
-    elif args.command == 'invite':
-        from health_mcp import accounts
-        with admin_connection() as conn:
-            code = accounts.create_invite(conn, args.note, args.days)
-        if args.out:
-            fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, 'w') as stream:
-                stream.write(code + '\n')
-            print(f'Invitation written to {args.out}, valid for {args.days} days')
-        else:
-            print(code)
     elif args.command == 'bind-account':
         from health_mcp import accounts
         password_hash = sys.stdin.readline().strip()

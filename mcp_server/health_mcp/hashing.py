@@ -1,4 +1,4 @@
-"""Hashes for secrets the connector stores: tokens, codes, invitations and passwords."""
+"""Hashes for secrets the connector stores: tokens, codes, sign-up addresses and passwords."""
 import base64
 import hashlib
 import hmac
