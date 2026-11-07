@@ -19,7 +19,7 @@ This repository holds the code only. It never contains anyone's health data.
 | Part | Where |
 | --- | --- |
 | Plugin with nine skills and an MCP connector, for Claude, ChatGPT and Codex | [plugins/health-archive](plugins/health-archive/README.md) |
-| MCP server with OAuth 2.1, invitations and accounts | [mcp_server](mcp_server/README.md) |
+| MCP server with OAuth 2.1 and accounts | [mcp_server](mcp_server/README.md) |
 | Database, write path, ontology and query tools | [database](database/README.md) |
 | Template archive every new patient starts from | [template](template/) |
 
@@ -30,7 +30,7 @@ In Claude Code:
 /plugin install health-archive@health-archive-marketplace
 ```
 
-The connector is invitation-only: ask its operator for an invitation, or run your own.
+Anyone can create an account on the connector's sign-in page, or run your own.
 
 ## Run your own
 
@@ -38,7 +38,7 @@ The connector is invitation-only: ask its operator for an invitation, or run you
 2. Copy `identity/local-profile.example.json` to `~/.config/health-archive/local-profile.json` and describe yourself as the first user; see [identity/README.md](identity/README.md). Personal configuration (profile, connection settings and deployment record) lives in that folder, never in a checkout.
 3. Run `database/setup.sh` for a local Docker database. For a remote one, follow [database/railway/README.md](database/railway/README.md) and run `database/setup-remote.sh`.
 4. Seed your archive from the template with `./database/healthdb bootstrap` followed by `./database/healthdb seed`. Accounts created through the connector are seeded automatically.
-5. Deploy `mcp_server/` with the variables its README lists, then bind your user to a sign-in account and create invitations for anyone else.
+5. Deploy `mcp_server/` with the variables its README lists, then bind your user to a sign-in account. Anyone else signs up on the sign-in page.
 
 ## Privacy model
 

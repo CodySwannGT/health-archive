@@ -23,7 +23,7 @@ The server implements the MCP authorization specification:
 - refresh token rotation, where the previous refresh token works once until the new one is used, so a client with several processes is not signed out;
 - RFC 7009 revocation.
 
-Clients discover this automatically. On first connection your browser opens a sign-in page that shows the requesting client and where it will return. Sign in with your username and password, or create an account with an invitation from the operator. Each account owns one patient chart, and tools act only on it. Five failed sign-ins lock that username for 15 minutes.
+Clients discover this automatically. On first connection your browser opens a sign-in page that shows the requesting client and where it will return. Sign in with your username and password, or create an account. Each account owns one patient chart, and tools act only on it. Five failed sign-ins lock that username for 15 minutes.
 
 Scopes: `health.read` for queries, `health.write` for `record_narrative`, `record_medication`, `capture_conversation` and `set_pooling`.
 
@@ -65,4 +65,4 @@ Scopes: `health.read` for queries, `health.write` for `record_narrative`, `recor
 
 ## Operate
 
-The server code is in `mcp_server/`, and [mcp_server/README.md](../../mcp_server/README.md) covers deployment, invitations and accounts. Sign-up requires a one-time invitation the operator creates with `python -m health_mcp invite`, so the service never holds data from people the operator did not invite.
+The server code is in `mcp_server/`, and [mcp_server/README.md](../../mcp_server/README.md) covers deployment and accounts. Anyone can sign up; sign-ups are limited to 3 an hour per network address and 30 an hour overall.

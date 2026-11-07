@@ -6,6 +6,6 @@ Include the affected component (`mcp_server`, `database`, or `plugins`), steps t
 
 Areas of particular interest:
 - account isolation and row-level security;
-- the OAuth authorization server: registration, PKCE, sign-in, invitations, rotation and revocation;
+- the OAuth authorization server: registration, PKCE, sign-in, open sign-up and its rate limit, rotation and revocation;
 - the write path's guards against stale or record-dropping archive versions;
 - anything that could place archive data in this public repository.

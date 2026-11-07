@@ -4,13 +4,12 @@ Implements the MCP authorization flow: protected resource and authorization
 server metadata, dynamic client registration, authorization code with PKCE
 (S256), refresh token rotation and revocation. State lives in the
 `health_oauth` schema, which the read-only database role cannot reach. Codes,
-tokens and invitations are stored only as SHA-256 hashes, and passwords as
+tokens and sign-up addresses are stored only as SHA-256 hashes, and passwords as
 scrypt hashes. Each token is bound to the user who approved it, and tools act
 only on that user's patient chart.
 
-People sign in on the consent page with their username and password. New
-people create an account with an invitation from the operator, which keeps
-the service closed to strangers' health data unless the operator invites them.
+People sign in on the consent page with their username and password. Anyone
+can create an account; sign-ups are rate limited per network address and overall.
 """
 import asyncio
 import hmac
@@ -37,6 +36,9 @@ MAX_FAILURES = 5
 GLOBAL_MAX_FAILURES = 50
 LOCKOUT_SECONDS = 900
 MIN_PASSWORD = 12
+SIGNUPS_PER_ADDRESS = 3
+GLOBAL_SIGNUPS = 30
+SIGNUP_WINDOW = 3600
 
 SCHEMA = '''
 CREATE SCHEMA IF NOT EXISTS health_oauth;
@@ -59,6 +61,7 @@ ALTER TABLE health_oauth.tokens ADD COLUMN IF NOT EXISTS user_id text REFERENCES
 UPDATE health_oauth.tokens SET revoked=true WHERE user_id IS NULL AND NOT revoked;
 CREATE TABLE IF NOT EXISTS health_oauth.login_failures (at double precision NOT NULL);
 ALTER TABLE health_oauth.login_failures ADD COLUMN IF NOT EXISTS username text;
+CREATE TABLE IF NOT EXISTS health_oauth.signups (at double precision NOT NULL, address_sha256 text NOT NULL);
 '''
 
 
@@ -200,6 +203,12 @@ class HealthOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
         row = conn.execute('SELECT count(*) AS total, count(*) FILTER (WHERE username=%s) AS mine FROM health_oauth.login_failures', (username,)).fetchone()
         return row['mine'] >= MAX_FAILURES or row['total'] >= GLOBAL_MAX_FAILURES
 
+    def _signup_allowed(self, conn, address):
+        # Addresses are kept only as hashes, and only for the window.
+        conn.execute('DELETE FROM health_oauth.signups WHERE at<%s', (time.time() - SIGNUP_WINDOW,))
+        row = conn.execute('SELECT count(*) AS total, count(*) FILTER (WHERE address_sha256=%s) AS mine FROM health_oauth.signups', (sha(address),)).fetchone()
+        return row['mine'] < SIGNUPS_PER_ADDRESS and row['total'] < GLOBAL_SIGNUPS
+
     def _grant(self, conn, row, request_id, user_id):
         """Issue a one-time code for the pending request to the signed-in user."""
         from psycopg.types.json import Jsonb
@@ -264,20 +273,21 @@ class HealthOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
             return _signup_page(request_id, csrf, f'Passwords must match and be at least {MIN_PASSWORD} characters.', values)
         if not display:
             return _signup_page(request_id, csrf, 'Enter your name.', values)
+        address = request.client.host if request.client else ''
         def create(conn):
-            if self._locked(conn, 'signup'):
-                return 'locked'
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext('health_oauth_signup'))")
+            if not self._signup_allowed(conn, address):
+                return 'limited'
             try:
-                return accounts.create_account(conn, username, hash_passphrase(password), display, timezone, invite=(form.get('invite') or '').strip())
+                created = accounts.create_account(conn, username, hash_passphrase(password), display, timezone)
             except ValueError as error:
                 conn.rollback()
-                if 'invitation' in str(error):
-                    conn.execute('INSERT INTO health_oauth.login_failures(at,username) VALUES (%s,%s)', (time.time(), 'signup'))
-                    conn.commit()
                 return str(error)
+            conn.execute('INSERT INTO health_oauth.signups(at,address_sha256) VALUES (%s,%s)', (time.time(), sha(address)))
+            return created
         created = await self._db(create)
-        if created == 'locked':
-            return _page('Temporarily locked', '<p>Too many failed sign-ups. Try again in 15 minutes.</p>', 429)
+        if created == 'limited':
+            return _page('Too many new accounts', '<p>Too many accounts were created recently. Try again in an hour.</p>', 429)
         if isinstance(created, str):
             return _signup_page(request_id, csrf, created, values)
         await asyncio.to_thread(accounts.seed_archive, created)
@@ -320,7 +330,7 @@ def _consent_page(row, request_id, csrf, error=None, username=''):
 <label for="username">Username</label><input id="username" name="username" autocomplete="username" value="{html.escape(username)}" autofocus>
 <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password">
 <div class="row"><button name="decision" value="deny" type="submit">Deny</button><button class="primary" name="decision" value="approve" type="submit">Sign in and approve</button></div></form>
-<p>New here? <a href="{html.escape(signup)}">Create an account with an invitation</a>.</p>'''
+<p>New here? <a href="{html.escape(signup)}">Create an account</a>.</p>'''
     return _page('Connect health archive', body)
 
 
@@ -331,7 +341,7 @@ def _signup_page(request_id, csrf, error=None, values=None):
     message = f'<p class="error">{html.escape(error)}</p>' if error else ''
     body = f'''<p>Your account gets its own private health archive. Only you can read it.</p>{message}
 <form method="post" action="/oauth/signup">{_hidden(request_id, csrf)}
-{field('invite', 'Invitation code')}{field('display_name', 'Your name', auto='name')}{field('username', 'Username', auto='username')}
+{field('display_name', 'Your name', auto='name')}{field('username', 'Username', auto='username')}
 {field('timezone', 'Time zone, such as America/New_York')}{field('password', f'Password, at least {MIN_PASSWORD} characters', 'password', 'new-password')}
 {field('confirm', 'Confirm password', 'password', 'new-password')}
 <div class="row"><button class="primary" type="submit">Create account and approve</button></div></form>'''
