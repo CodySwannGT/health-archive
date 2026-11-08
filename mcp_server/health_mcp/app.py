@@ -327,6 +327,9 @@ def build(auth_provider=None, issuer_url=None):
         import writes
         return await _as_account(lambda: _jsonable(writes.capture_connector_messages(session_id.lower(), client, messages, project)))
 
+    # Directories read a tool's name from annotations.title, so repeat each title there.
+    for tool in server._tool_manager.list_tools():
+        tool.annotations = tool.annotations.model_copy(update={'title': tool.title})
     return server
 
 
