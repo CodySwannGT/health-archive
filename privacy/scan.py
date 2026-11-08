@@ -29,7 +29,8 @@ PATTERNS = {
     'connection string with password': re.compile(r'postgres(?:ql)?://[^:\s/]+:[^@\s]+@'),
     'cloud access key': re.compile(r'\b(?:AKIA|ASIA)[0-9A-Z]{16}\b'),
 }
-ALLOWED_EMAILS = re.compile(r'^(?:noreply@anthropic\.com|dev@example\.com|[^@]+@example\.(?:com|org|test))$')
+# The published support and privacy contact is public by design.
+ALLOWED_EMAILS = re.compile(r'^(?:noreply@anthropic\.com|dev@example\.com|cody\.swann@gmail\.com|[^@]+@example\.(?:com|org|test))$')
 ALLOWED_IDS = {'pat_00000000000000000000000000000001', 'usr_00000000000000000000000000000001'}
 # Publisher attribution is public: deny-list terms are ignored only in these manifest fields.
 PUBLISHER_MANIFESTS = ('plugins/health-archive/plugin.json', 'plugins/health-archive/.claude-plugin/plugin.json', '.claude-plugin/marketplace.json')
