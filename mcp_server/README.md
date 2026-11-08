@@ -7,6 +7,7 @@ A Streamable HTTP MCP server with a built-in OAuth 2.1 authorization server. Eac
 - **Open sign-up.** Anyone can create an account on the authorization page. Sign-ups are limited to 3 an hour per network address and 30 an hour overall. The limit keeps addresses only as SHA-256 hashes, for an hour.
 - **A private archive per account.** Sign-up creates a user, a patient chart and owner access, then seeds that chart's archive with the generic template in `template/`: the ontology and schemas.
 - **Credentials.** Passwords are stored as scrypt hashes. Codes and tokens are stored as SHA-256 hashes in the `health_oauth` schema, which the read-only role cannot access. Five failed sign-ins lock a username for 15 minutes, and 50 failures across all accounts lock sign-in globally.
+- **Deletion.** `/account/delete` deletes an account after its password and a typed confirmation: every row of its charts, their graph vertices, source contents no other chart uses, and its tokens. `/privacy` and `/terms` serve the policies in `health_mcp/policies.py`; set `HEALTH_MCP_OPERATOR` and `HEALTH_MCP_CONTACT` to name your own.
 - **Isolation.** Tokens are bound to the user who approved them. Read tools run as that user through the read-only role, whose row-level security admits only that user's patients. Write tools reject another patient's record slug.
 
 ## Operate
@@ -27,7 +28,7 @@ Run the commands from `mcp_server/` with the project environment, for example `.
 | `Dockerfile`, `railway/` | Image built from a staged context of code, the template archive and the embedding model files |
 | `tests/test_server.py` | Unit tests |
 | `tests/connector_flow.py` | End-to-end check for an existing account: discovery, registration, PKCE, sign-in, tools, rotation, revocation |
-| `tests/multi_user_flow.py` | End-to-end check of open sign-up, its rate limit and isolation between accounts. Run it only against a test database |
+| `tests/multi_user_flow.py` | End-to-end check of open sign-up, its rate limit, isolation between accounts and account deletion. Run it only against a test database |
 
 ## Deploy
 

@@ -85,3 +85,52 @@ def seed_archive(account):
         return ingest(put_paths=paths, put_root=TEMPLATE, operation='seed-archive')
     finally:
         reset_account(token)
+
+
+# Children before parents: every foreign key is NO ACTION, so this order is what lets each delete succeed.
+PATIENT_TABLES = ['chunks', 'documents', 'source_record_aliases', 'relationships', 'association_versions', 'associations',
+                  'concepts', 'clinical_types', 'ontology_categories', 'ontology_relations', 'import_issues',
+                  'pooling_consent_events', 'pooling_consent', 'source_history', 'source_commits']
+
+
+def delete_account(conn, user_id):
+    """Permanently delete an account, the patient charts it owns and everything stored for them.
+
+    Source file contents shared with another chart, such as the template ontology, stay for that chart.
+    Pooled patterns hold no patient identifiers and are recomputed without the deleted chart."""
+    from common import canonical, cypher
+    username = conn.execute('SELECT username FROM health_oauth.accounts WHERE user_id=%s', (user_id,)).fetchone()
+    patients = [r['patient_id'] for r in conn.execute(
+        "SELECT patient_id FROM health.patient_access WHERE user_id=%s AND role='owner' ORDER BY patient_id", (user_id,))]
+    counts = {}
+    for patient in patients:
+        # The ingest lock: no write to this chart can be in flight while it is deleted.
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext('health_archive_ingest:'||%s))", (patient,))
+        cypher(conn, 'MATCH (n:Entity) WHERE n.patient_id=' + canonical(patient) + ' DETACH DELETE n RETURN count(*)')
+        def delete(statement, table):
+            counts[table] = counts.get(table, 0) + conn.execute(statement, (patient,)).rowcount
+        for table in PATIENT_TABLES:
+            delete(f'DELETE FROM health.{table} WHERE patient_id=%s', table)
+        delete('DELETE FROM health.resource_versions WHERE resource_id IN (SELECT resource_id FROM health.resources WHERE patient_id=%s)', 'resource_versions')
+        delete('DELETE FROM health.resources WHERE patient_id=%s', 'resources')
+        delete('DELETE FROM health.record_versions WHERE record_id IN (SELECT record_id FROM health.records WHERE patient_id=%s)', 'record_versions')
+        delete('DELETE FROM health.records WHERE patient_id=%s', 'records')
+        delete('DELETE FROM health.artifacts WHERE patient_id=%s', 'artifacts')
+        delete('DELETE FROM health.artifact_versions WHERE patient_id=%s', 'artifact_versions')
+        delete('DELETE FROM health.ingestion_runs WHERE patient_id=%s', 'ingestion_runs')
+        delete('DELETE FROM health.patient_access WHERE patient_id=%s', 'patient_access')
+        delete('DELETE FROM health.patients WHERE patient_id=%s', 'patients')
+    counts['artifact_contents'] = conn.execute('''DELETE FROM health.artifact_contents c WHERE
+      NOT EXISTS (SELECT 1 FROM health.artifacts a WHERE a.sha256=c.sha256)
+      AND NOT EXISTS (SELECT 1 FROM health.artifact_versions v WHERE v.sha256=c.sha256)
+      AND NOT EXISTS (SELECT 1 FROM health.source_history h WHERE h.sha256=c.sha256)''').rowcount
+    conn.execute('DELETE FROM health.patient_access WHERE user_id=%s', (user_id,))
+    conn.execute('DELETE FROM health.pooling_consent_events WHERE user_id=%s', (user_id,))
+    conn.execute('DELETE FROM health.pooling_consent WHERE user_id=%s', (user_id,))
+    conn.execute('DELETE FROM health_oauth.tokens WHERE user_id=%s', (user_id,))
+    if username:
+        conn.execute('UPDATE health_oauth.invites SET used_by=NULL WHERE used_by=%s', (username['username'],))
+        conn.execute('DELETE FROM health_oauth.login_failures WHERE username=%s', (username['username'],))
+    conn.execute('DELETE FROM health_oauth.accounts WHERE user_id=%s', (user_id,))
+    conn.execute('DELETE FROM health.users WHERE user_id=%s', (user_id,))
+    return {'deleted_patients': len(patients), 'deleted_rows': counts}

@@ -36,6 +36,7 @@ MAX_FAILURES = 5
 GLOBAL_MAX_FAILURES = 50
 LOCKOUT_SECONDS = 900
 MIN_PASSWORD = 12
+DELETE_PHRASE = 'delete my archive'
 SIGNUPS_PER_ADDRESS = 3
 GLOBAL_SIGNUPS = 30
 SIGNUP_WINDOW = 3600
@@ -295,14 +296,39 @@ class HealthOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
         return RedirectResponse(location, 302)
 
 
+    async def delete_account(self, request: Request):
+        """Delete an account and its archive, after the password and a typed confirmation."""
+        if request.method == 'GET':
+            return _delete_page()
+        form = await request.form()
+        username = (form.get('username') or '').strip().lower()
+        if (form.get('confirm') or '').strip().lower() != DELETE_PHRASE:
+            return _delete_page(f'Type "{DELETE_PHRASE}" to confirm.', username)
+        def run(conn):
+            if self._locked(conn, username):
+                return 'locked'
+            account = conn.execute('SELECT user_id,password_hash FROM health_oauth.accounts WHERE username=%s', (username,)).fetchone()
+            if not verify_passphrase(form.get('password', ''), account['password_hash'] if account else DECOY) or not account:
+                conn.execute('INSERT INTO health_oauth.login_failures(at,username) VALUES (%s,%s)', (time.time(), username))
+                return 'wrong'
+            return accounts.delete_account(conn, account['user_id'])
+        result = await self._db(run)
+        if result == 'locked':
+            return _page('Temporarily locked', '<p>Too many failed sign-ins. Try again in 15 minutes.</p>', 429)
+        if result == 'wrong':
+            return _delete_page('Incorrect username or password.', username)
+        return _page('Account deleted', '<p>Your account and your health archive have been permanently deleted, and every connected assistant has been signed out.</p>'
+                     '<p>Encrypted backups made before now can still contain your data until they are deleted; see the <a href="/privacy">privacy policy</a>.</p>')
+
 def _page(title, body, status=200):
+    width = 720 if len(body) > 3000 else 440
     content = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title><style>
 :root{{color-scheme:light dark;--bg:#f7f7f5;--fg:#1c1c1a;--muted:#5f5f5a;--card:#fff;--line:#d9d9d4;--accent:#2f5d50}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#151513;--fg:#ecece8;--muted:#a3a39c;--card:#1f1f1c;--line:#3a3a35;--accent:#7fb8a6}}}}
 body{{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;padding:16px}}
-main{{background:var(--card);border:1px solid var(--line);border-radius:10px;max-width:440px;width:100%;padding:24px}}
-h1{{font-size:1.25rem;margin:0 0 12px}} p,li{{color:var(--muted)}} code{{word-break:break-all}} a{{color:var(--accent)}}
+main{{background:var(--card);border:1px solid var(--line);border-radius:10px;max-width:{width}px;width:100%;padding:24px}}
+h1{{font-size:1.25rem;margin:0 0 12px}} h2{{font-size:1.05rem;margin:20px 0 6px}} p,li{{color:var(--muted)}} code{{word-break:break-all}} a{{color:var(--accent)}}
 label{{display:block;margin:14px 0 6px;font-weight:600}} input{{width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}}
 .row{{display:flex;gap:8px;margin-top:16px}} button{{flex:1;padding:10px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-weight:600}}
 button.primary{{background:var(--accent);border-color:var(--accent);color:var(--card)}} .error{{color:#b3261e}}
@@ -330,7 +356,7 @@ def _consent_page(row, request_id, csrf, error=None, username=''):
 <label for="username">Username</label><input id="username" name="username" autocomplete="username" value="{html.escape(username)}" autofocus>
 <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password">
 <div class="row"><button name="decision" value="deny" type="submit">Deny</button><button class="primary" name="decision" value="approve" type="submit">Sign in and approve</button></div></form>
-<p>New here? <a href="{html.escape(signup)}">Create an account</a>.</p>'''
+<p>New here? <a href="{html.escape(signup)}">Create an account</a>.</p><p>Health Archive keeps your health records and helps you track them. It is not medical advice, diagnosis or treatment; talk to a clinician about health decisions. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>'''
     return _page('Connect health archive', body)
 
 
@@ -344,5 +370,16 @@ def _signup_page(request_id, csrf, error=None, values=None):
 {field('display_name', 'Your name', auto='name')}{field('username', 'Username', auto='username')}
 {field('timezone', 'Time zone, such as America/New_York')}{field('password', f'Password, at least {MIN_PASSWORD} characters', 'password', 'new-password')}
 {field('confirm', 'Confirm password', 'password', 'new-password')}
-<div class="row"><button class="primary" type="submit">Create account and approve</button></div></form>'''
+<div class="row"><button class="primary" type="submit">Create account and approve</button></div></form><p>By creating an account you agree to the terms. Health Archive keeps your health records and helps you track them. It is not medical advice, diagnosis or treatment; talk to a clinician about health decisions. <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>'''
     return _page('Create your health archive', body)
+
+
+def _delete_page(error=None, username=''):
+    message = f'<p class="error">{html.escape(error)}</p>' if error else ''
+    body = f"""<p>This permanently deletes your account and every record, document and conversation in your health archive, and signs out every connected assistant. It cannot be undone.</p>{message}
+<form method="post" action="/account/delete">
+<label for="username">Username</label><input id="username" name="username" autocomplete="username" value="{html.escape(username)}">
+<label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password">
+<label for="confirm">Type "{DELETE_PHRASE}" to confirm</label><input id="confirm" name="confirm" autocomplete="off">
+<div class="row"><button class="primary" type="submit">Delete my account and archive</button></div></form>"""
+    return _page('Delete your account', body)

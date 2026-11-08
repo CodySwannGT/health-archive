@@ -11,6 +11,17 @@ The package follows both the Claude Code plugin format and the vendor-neutral [A
 | `skills/*/SKILL.md` | Both. Agent Skills format |
 | `assets/` | Icon for both directories |
 
+## Not medical advice
+
+Health Archive stores your health records and finds patterns in them. Patterns are associations, not causes or diagnoses, and nothing from the archive or an assistant using it is medical advice. Talk to a clinician before changing a medication or making a health decision. In an emergency, call your local emergency number.
+
+## Privacy, terms and deleting your account
+
+- [Privacy policy](https://health-mcp-production-91ec.up.railway.app/privacy)
+- [Terms of use](https://health-mcp-production-91ec.up.railway.app/terms)
+- Delete your account and archive at [https://health-mcp-production-91ec.up.railway.app/account/delete](https://health-mcp-production-91ec.up.railway.app/account/delete). Deletion is immediate and permanent.
+- Support: [cody.swann@gmail.com](mailto:cody.swann@gmail.com)
+
 ## Connector
 
 `https://health-mcp-production-91ec.up.railway.app/mcp` (Streamable HTTP)
