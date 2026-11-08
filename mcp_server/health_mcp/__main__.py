@@ -24,6 +24,7 @@ def serve(host, port):
     from starlette.routing import Route
     from common import connect
     from mcp.server.auth.routes import create_protected_resource_routes
+    from health_mcp import policies
     from health_mcp.oauth import SCOPES, HealthOAuthProvider, _page
     public_url = os.environ['HEALTH_MCP_PUBLIC_URL'].rstrip('/')
     if urlparse(public_url).scheme != 'https' and urlparse(public_url).hostname not in ('localhost', '127.0.0.1'):
@@ -33,6 +34,15 @@ def serve(host, port):
     server = build(provider, public_url)
     server.custom_route('/oauth/consent', methods=['GET', 'POST'], include_in_schema=False)(provider.consent)
     server.custom_route('/oauth/signup', methods=['GET', 'POST'], include_in_schema=False)(provider.signup)
+    server.custom_route('/account/delete', methods=['GET', 'POST'], include_in_schema=False)(provider.delete_account)
+
+    async def privacy(request):
+        return _page('Health Archive privacy policy', policies.PRIVACY)
+    server.custom_route('/privacy', methods=['GET'], include_in_schema=False)(privacy)
+
+    async def terms(request):
+        return _page('Health Archive terms of use', policies.TERMS)
+    server.custom_route('/terms', methods=['GET'], include_in_schema=False)(terms)
 
     async def document_page(request):
         return _page('Health archive document', '<p>Open this document through your connected assistant. The archive is not browsable on the web.</p>')

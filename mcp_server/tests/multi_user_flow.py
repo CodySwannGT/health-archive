@@ -65,6 +65,22 @@ result, scoped = bob.call('record_narrative', {'source_name': 'scope-test', 'sou
 check("bob cannot write with alice's patient scope", result.get('isError'))
 result, vitals = alice.call('vitals', {})
 check("alice's archive is unchanged by bob", [r['numeric_value'] for r in vitals['results']] == [people[0][2]])
+# Deleting an account removes it and its archive, and leaves everyone else's alone.
+page = alice.http.get(base + '/account/delete')
+check('delete page asks for the password and a typed confirmation', page.status_code == 200 and 'delete my archive' in page.text)
+wrong = alice.http.post(base + '/account/delete', data={'username': people[0][0], 'password': password, 'confirm': 'yes'})
+check('delete without the confirmation phrase is refused', wrong.status_code == 200 and 'to confirm' in wrong.text)
+done = alice.http.post(base + '/account/delete', data={'username': people[0][0], 'password': password, 'confirm': 'delete my archive'})
+check('delete with password and confirmation succeeds', done.status_code == 200 and 'permanently deleted' in done.text)
+check("alice's tokens stop working", alice.rpc('tools/list', {})[0].status_code == 401)
+again = Connector(base).discover(); again.register('After deletion'); again.start_authorization()
+check('alice cannot sign in again', 'Incorrect username or password' in again.sign_in(people[0][0], password).text)
+result, vitals = bob.call('vitals', {})
+check("bob's archive is intact after alice is deleted", [r['numeric_value'] for r in vitals['results']] == [people[1][2]])
+for path in ('/privacy', '/terms'):
+    page = alice.http.get(base + path)
+    check(f'{path} is served', page.status_code == 200 and 'medical advice' in page.text)
+print('ALICE_PATIENT', alice_status['patient_id'])
 # Three sign-ups per address per hour: alice and bob used two.
 extra = Connector(base).discover(); extra.register('Third account'); extra.start_authorization()
 check('a third sign-up from one address is allowed', extra.sign_up('carol_' + suffix, password, 'Carol').status_code == 302)

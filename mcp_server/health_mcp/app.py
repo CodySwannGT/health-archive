@@ -33,7 +33,9 @@ then read the facts back before saying they were saved. Capture user-facing conv
 Drawing connections is the purpose: use associations for evidence-graded patterns in the person's own records, with
 competing explanations and pooled context, and say how strong each is. An association is never a cause or a diagnosis.
 Run the morning check-in with check_in; it asks about symptom-free and alcohol-free days too, because comparisons need explicit negatives.
-When check_in reports intake_needed, run the intake first with intake.'''
+When check_in reports intake_needed, run the intake first with intake.
+This is not medical advice. When interpreting records or patterns, say so once, and point the person to a clinician for decisions;
+the person decides what to do. On any urgent symptom, tell them to seek urgent care or call emergency services.'''
 
 READ = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -112,7 +114,7 @@ def build(auth_provider=None, issuer_url=None):
     server = MCPServer(name='health-archive', title='Health Archive', instructions=INSTRUCTIONS, version='1.0.0',
                        auth_server_provider=auth_provider, auth=auth)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Search records', annotations=READ)
     async def search(query: str) -> dict:
         """Search the health archive's source passages (semantic plus full text). Returns result IDs for fetch.
 
@@ -121,7 +123,7 @@ def build(auth_provider=None, issuer_url=None):
         base = (issuer_url or 'https://health-archive.invalid').rstrip('/')
         return {'results': [{'id': m['document_id'], 'title': m['title'], 'url': f"{base}/documents/{m['document_id']}"} for m in result['matches']]}
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Fetch search result', annotations=READ)
     async def fetch(id: str) -> dict:
         """Fetch the full text and provenance of a document returned by search."""
         doc = await _query('document', document_id=id)
@@ -131,7 +133,7 @@ def build(auth_provider=None, issuer_url=None):
         metadata = {k: doc.get(k) for k in ('source', 'source_path', 'record_id', 'clinical_date', 'evidence_kind', 'is_current')}
         return {'id': id, 'title': doc['title'], 'text': doc['text_content'], 'url': f'{base}/documents/{id}', 'metadata': metadata}
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Search the archive', annotations=READ)
     async def search_archive(question: str, limit: int = 10, include_research: bool = False,
                              include_conversation: bool = False, history: bool = False) -> dict:
         """Search source passages with excerpts, offsets, dates and evidence kinds. Optionally include agent research,
@@ -139,52 +141,52 @@ def build(auth_provider=None, issuer_url=None):
         return await _query('search', question=question, limit=limit, include_research=include_research,
                             history=history, include_conversation=include_conversation)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Archive status', annotations=READ)
     async def status() -> dict:
         """Database connection, TLS, extensions and record counts."""
         return await _query('status')
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Lab results', annotations=READ)
     async def labs(name: str = '', limit: int = 100) -> dict:
         """Exact laboratory values from every source with dates, units, reference ranges, flags and concepts. Filter by analyte name or concept label."""
         return await _query('labs', name=name, limit=limit)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Medications', annotations=READ)
     async def medications(changes: bool = False, all_sources: bool = False) -> dict:
         """Current self-reported medication regimen. `changes` adds the change log; `all_sources` adds clinical records."""
         return await _query('medications', changes=changes, all_sources=all_sources)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Symptoms and reports', annotations=READ)
     async def symptoms() -> dict:
         """Patient symptom reports, exposures, associations, hypotheses, responses and preferences with quoted evidence."""
         return await _query('symptoms')
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Vital signs', annotations=READ)
     async def vitals() -> dict:
         """Vital signs from every source: patient reports, donor screening and clinical records, each with its concept."""
         return await _query('vitals')
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Weight and body measurements', annotations=READ)
     async def anthropometrics(history: bool = False) -> dict:
         """Weight, height, BMI and body composition from every source, plus measurement context. `history` includes superseded measurements."""
         return await _query('anthropometrics', history=history)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Exercise and sleep', annotations=READ)
     async def activity() -> dict:
         """Exercise routines, completed exercise sessions and nightly sleep reports. `concept` with `sleep` gives hours slept as a series."""
         return await _query('activity')
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Profile', annotations=READ)
     async def profile() -> dict:
         """Patient-reported demographics with report dates."""
         return await _query('profile')
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Timeline', annotations=READ)
     async def timeline(name: str = '', from_date: str | None = None, to_date: str | None = None, limit: int = 100) -> dict:
         """Current resources by clinical date, filtered by name and an ISO date range."""
         return await _query('timeline', name=name, from_date=from_date, to_date=to_date, limit=limit)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Get record', annotations=READ)
     async def get_record(record_id: str) -> dict:
         """Complete source payload and every version of one record."""
         result = await _query('record', record_id=record_id)
@@ -192,35 +194,35 @@ def build(auth_provider=None, issuer_url=None):
             raise ValueError('Not found')
         return result
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Get document', annotations=READ)
     async def get_document(document_id: str) -> dict:
         """One complete source document with provenance."""
         return await _query('document', document_id=document_id)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Record relationships', annotations=READ)
     async def graph(record_id: str | None = None, limit: int = 40) -> dict:
         """Graph relationships around a resource, a concept (concept:ID), a clinical type (type:ID), or the patient when omitted."""
         return await _query('graph', record_id=record_id, limit=limit)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Ontology', annotations=READ)
     async def ontology(category: str | None = None, relations: bool = False, types: bool = False) -> dict:
         """Registered record categories, clinical types (`types`) and relationship types with their allowed endpoints (`relations`).
         `category` returns its JSON Schema for recording."""
         return await _query('ontology', category=category, relations=relations, types=types)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Find concepts', annotations=READ)
     async def concepts(search: str = '', family: str | None = None, type: str | None = None, limit: int = 100) -> dict:
         """Concepts such as body weight, a laboratory test, a medication or a condition, with record counts and codes.
         Filter by label, family (measurement, medication, condition, symptom, ...) or clinical type."""
         return await _query('concepts', search=search, family=family, type=type, limit=limit)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Concept history', annotations=READ)
     async def concept(concept: str, limit: int = 200) -> dict:
         """One concept (ID such as body_weight, or its label) and its records from every source, newest first.
         Use it for trends: blood pressure, weight or a lab test over time across patient reports and clinical records."""
         return await _query('concept', concept=concept, limit=limit)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Connections in your records', annotations=READ)
     async def associations(concept: str = '', min_strength: str = 'weak', method: str | None = None, limit: int = 100) -> dict:
         """Connections the engine found in this person's dated records: which exposures (medications, alcohol, foods)
         track which outcomes (symptoms, weight, blood pressure), with method, strength (insufficient, weak, moderate,
@@ -232,14 +234,14 @@ def build(auth_provider=None, issuer_url=None):
             raise ToolError('min_strength must be insufficient, weak, moderate or strong')
         return await _query('associations', concept=concept, min_strength=min_strength, method=method, limit=limit)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Pooled patterns', annotations=READ)
     async def pooled_patterns(concept: str = '', limit: int = 100) -> dict:
         """Patterns shared by at least five opted-in people, such as how often an exposure tracks a symptom across users.
         Aggregates only: no person, record, date or text. Use them as background for this person's own associations,
         never as evidence about this person. They are not published."""
         return await _query('pooled-patterns', concept=concept, limit=limit)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Daily check-in agenda', annotations=READ)
     async def check_in(date: str | None = None, days: int = 14) -> dict:
         """The morning check-in agenda, in order and tailored to this person's records: urgent screen, open question,
         tracked measurements, sleep, yesterday's workout, medication changes and as-needed doses, exposures, symptoms
@@ -249,7 +251,7 @@ def build(auth_provider=None, issuer_url=None):
         including "no", and never treat an unreported day as symptom-free."""
         return await _query('check-in', date=date, days=min(max(days, 1), 60))
 
-    @server.tool(annotations=READ)
+    @server.tool(title='First-visit intake', annotations=READ)
     async def intake(date: str | None = None) -> dict:
         """The first-visit intake agenda: goals, current symptoms, medications, history, habits, home equipment, basics
         and preferences, each with what the archive already knows so only gaps are asked. It ends with a proposed daily
@@ -257,12 +259,12 @@ def build(auth_provider=None, issuer_url=None):
         a plan exists. Follow the health-intake skill."""
         return await _query('intake', date=date)
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Pooling status', annotations=READ)
     async def pooling() -> dict:
         """Whether this chart contributes to pooled patterns, the consent text, and how many patterns exist."""
         return await _query('pooling', opt_in=False, opt_out=False)
 
-    @server.tool(annotations=WRITE)
+    @server.tool(title='Turn pooling on or off', annotations=WRITE)
     async def set_pooling(opt_in: bool) -> dict:
         """Opt this chart in to or out of pooled patterns. Only on the person's explicit request, after showing them the
         consent text from `pooling`. Opting out removes their contribution immediately."""
@@ -270,12 +272,12 @@ def build(auth_provider=None, issuer_url=None):
         import writes
         return await _as_account(lambda: _jsonable(writes.set_pooling_consent(opt_in)))
 
-    @server.tool(annotations=READ)
+    @server.tool(title='Read-only SQL query', annotations=READ)
     async def query(sql: str, limit: int = 200) -> dict:
         """Bounded read-only SQL over the health schema, using the read-only role. Prefer the domain tools."""
         return await _query('query', sql=sql, file=None, limit=min(max(limit, 1), 1000))
 
-    @server.tool(annotations=WRITE)
+    @server.tool(title='Record health facts', annotations=WRITE)
     async def record_narrative(source_name: str, source_text: str, extraction: dict,
                                revise: bool = False, dry_run: bool = False) -> dict:
         """Record a reviewed symptom/lifestyle extraction against the patient's exact source text.
@@ -295,7 +297,7 @@ def build(auth_provider=None, issuer_url=None):
                 return _jsonable(writes.record_narrative(source, extraction_path, revise, dry_run))
         return await _as_account(run)
 
-    @server.tool(annotations=WRITE)
+    @server.tool(title='Record medication', annotations=WRITE)
     async def record_medication(report: str, source_text: str, row: dict, dry_run: bool = False) -> dict:
         """Record a reviewed supplemental medication regimen, change or administration row.
 
@@ -313,7 +315,7 @@ def build(auth_provider=None, issuer_url=None):
                 return _jsonable(writes.record_medication(source, row_path, _safe_name(report), dry_run))
         return await _as_account(run)
 
-    @server.tool(annotations=WRITE)
+    @server.tool(title='Save conversation', annotations=WRITE)
     async def capture_conversation(session_id: str, client: str, messages: list[dict], project: bool = False) -> dict:
         """Preserve user-facing conversation turns in the audit archive. Repeat submissions are no-ops.
 

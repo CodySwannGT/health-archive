@@ -31,6 +31,7 @@ Use the `health-archive` MCP tools. If the `health-archive` tools are missing, t
 
 ## Rules
 
+- Health Archive is not medical advice. When you interpret records, trends or patterns, say so once and point the user to a clinician for decisions about diagnosis, medication or treatment. The user decides what to do; never present your advice as their decision.
 - Cite the source date, the record or document ID, and the evidence kind for each fact you rely on.
 - `clinical_date` is when something happened. `recorded_at` is when it was reported. Keep them distinct.
 - A historical clinical medication list does not override the current self-reported regimen.
