@@ -34,6 +34,22 @@ def save_json(path, obj):
     save(path, json.dumps(obj, ensure_ascii=False, indent=2) + "\n")
 
 
+def schema_problem(validator, record):
+    """The first schema error of a record, named by its key and field, judged against its own record type's branch."""
+    from jsonschema.exceptions import best_match
+    if validator.is_valid(record):
+        return None
+    schema = validator.schema
+    branch = next((b for b in schema['oneOf'] if b['properties']['record_type'].get('const') == record.get('record_type')), None)
+    if branch is None:
+        return f"Record {record.get('record_key')}: unknown record_type {record.get('record_type')!r}"
+    error = best_match(Draft202012Validator({**branch, '$defs': schema['$defs']}, format_checker=FormatChecker()).iter_errors(record))
+    if error is None:
+        return f"Record {record.get('record_key')} ({record['record_type']}) does not match the schema"
+    where = '/'.join(map(str, error.absolute_path)) or 'record'
+    return f"Record {record.get('record_key')} ({record['record_type']}) at {where}: {error.message[:300]}"
+
+
 def main():
     cli = argparse.ArgumentParser()
     cli.add_argument("source", type=Path)
@@ -89,7 +105,9 @@ def main():
     validator = Draft202012Validator(json.loads((ROOT / "symptom.schema.json").read_text()), format_checker=FormatChecker())
     validator.check_schema(validator.schema)
     for record in records:
-        validator.validate(record)
+        problem = schema_problem(validator, record)
+        if problem:
+            raise SystemExit(problem)
     for record in records:
         if record['record_type'] == 'body_composition_measurement':
             bounds = record['details']['value_range']
