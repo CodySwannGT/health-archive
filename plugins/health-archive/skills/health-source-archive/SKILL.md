@@ -5,6 +5,24 @@ description: Add, retire or back up original health source files, such as new la
 
 # Manage source files in the database-owned archive
 
+## Lab reports through the connector
+
+When the user shares a lab report (a PDF, portal page or photo), record it with the connector's `record_lab_report` tool. No local checkout is needed.
+
+1. Query `labs` for the collection date first. If the report is already in the archive, don't add it again.
+2. Transcribe the whole report to text as `source_text`, including the header, flags and comments.
+3. Give one observation per printed result. Each observation needs:
+   - `analyte_name`;
+   - `value_text`, exactly as printed;
+   - `unit_text`, `reference_text`, `flag` and `panel_name` as printed, when present;
+   - `evidence_quote`: the result's line copied verbatim from `source_text`. It must contain the value and any unit and range.
+4. Never convert units, add clinical codes or fill in a result the report does not show. Previous-result columns are context, not new results.
+5. Set `transcribed_by` honestly (`agent` when you transcribed it) and describe what was transcribed in `source_description`.
+6. Run with `dry_run: true`, fix any refused quote, then record. Read the results back with `labs` before saying they were saved.
+7. To correct a transcription, record it again under the same `report_name` with `revise: true`. The earlier version stays in history.
+
+The steps below are for original files and need a local checkout.
+
 The database holds every archive file's original bytes and version history. Local files are an export and are never read implicitly. These operations need a local checkout with database credentials.
 
 ## Add or update source files

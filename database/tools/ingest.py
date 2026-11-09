@@ -114,7 +114,8 @@ class Importer:
         content = path.read_bytes()
         sha = hashlib.sha256(content).hexdigest()
         rel = str(path.relative_to(ROOT))
-        source = ('quest' if rel.startswith('lab-results/quest/') else 'labcorp' if rel.startswith('lab-results/')
+        source = ('quest' if rel.startswith('lab-results/quest/') else 'lab_transcription' if rel.startswith('lab-results/transcribed/')
+                  else 'labcorp' if rel.startswith('lab-results/')
                   else 'cleveland_clinic' if rel.startswith('health-records/cleveland-clinic/')
                   else 'oneblood' if rel.startswith('vitals/') else 'health_conversation' if rel.startswith('conversations/')
                   else 'patient_report' if rel.startswith(('meds/','symptoms/'))
@@ -260,7 +261,7 @@ class Importer:
         self.conn.execute('INSERT INTO health.import_issues VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING',
                           (iid,self.patient,path,str(native),severity,reason,Jsonb(details)))
 
-    def lab_observation(self, source, report, key, name, value, path, clinical, unit=None, reference=None, flag=None, provenance=None, code=None, details=None):
+    def lab_observation(self, source, report, key, name, value, path, clinical, unit=None, reference=None, flag=None, provenance=None, code=None, details=None, evidence='source_record'):
         payload={'name':name,'value':value,'unit':unit,'reference':reference,'flag':flag,'date':clinical,'source_code':code,'details':details or {}}
         panel=(details or {}).get('panel') or (provenance or {}).get('panel') or ''
         concept=(source,str(report),' '.join(str(panel).casefold().split()),' '.join(str(name).casefold().split()))
@@ -277,7 +278,7 @@ class Importer:
         self.conn.execute('INSERT INTO health.source_record_aliases VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING',(self.patient,source,'lab_observation',stable_key,rid))
         self.resource(rid,name or 'Unlabeled report commentary','Observation' if value is not None else 'Basic','laboratory' if value is not None else 'lab_commentary',clinical,'source_service_or_collection_date' if clinical else 'unknown',
                       value=value,unit=unit,reference=reference,flag=flag,code_system='http://loinc.org' if code else None,
-                      code=code,details=payload,provenance=provenance,status='unknown')
+                      code=code,details=payload,provenance=provenance,status='unknown',evidence=evidence)
         parent=self.lookup.get((source,str(report)))
         if parent: self.relationship(rid,parent,'PART_OF_REPORT','source_structure',provenance or {})
         self.stats[source+'_lab_observations']+=1
@@ -327,6 +328,30 @@ def import_labcorp(imp):
         native=r['report_id']
         imp.lab_observation('labcorp',native,r['observation_id'],r['analyte_name'],r['value']['text'],
                             'lab-results/imports/observations.jsonl',r['collection_date'],r['unit_text'],r['reference_text'],r['flag'],r['provenance'],details=r)
+
+
+def import_transcribed_labs(imp):
+    """Lab reports transcribed to text, each result tied to its quoted line. Values stay as printed."""
+    for report_path in sorted((ROOT/'lab-results/transcribed').glob('*/report.json')):
+        path=str(report_path.relative_to(ROOT))
+        r=json.loads(report_path.read_text())
+        source,native=r['source'],'transcribed:'+r['report_id']
+        clinical=r['collection_date']
+        report_fields={k:v for k,v in r.items() if k!='observations'}
+        rid,_=imp.record(source,'report',native,report_fields,path,r['provenance'])
+        imp.resource(rid,f"{r['laboratory']} report {r['collection_date']} (transcribed)",'DiagnosticReport','lab_report',clinical,'collection_date',
+                     recorded=r['provenance']['recorded_at'],evidence='source_transcription',
+                     details={'archive_kind':'transcribed_report','source_description':r['source_description'],'transcribed_by':r['transcribed_by'],
+                              'report_status':r['report_status'],'reported_date':r.get('reported_date'),'specimen_id':r.get('specimen_id')},
+                     provenance={'path':path,**r['provenance']})
+        text=(ROOT/r['provenance']['source_path']).read_text()
+        imp.document(native,source,f"{r['laboratory']} report {r['collection_date']} (transcription)",r['provenance']['source_path'],text,
+                     evidence='source_transcription',rid=rid,clinical=clinical,provenance={'report_id':native,**r['provenance']})
+        for idx,o in enumerate(r['observations']):
+            prov={'path':path,'source_path':r['provenance']['source_path'],'source_sha256':r['provenance']['source_sha256'],
+                  'panel':o.get('panel_name'),'evidence':o['evidence'],'transcribed_by':r['transcribed_by']}
+            imp.lab_observation(source,native,'obs:'+str(idx),o['analyte_name'],o['value_text'],path,clinical,o.get('unit_text'),o.get('reference_text'),
+                                o.get('flag'),prov,details={**o,'panel':o.get('panel_name'),'parser':'quoted_transcription'},evidence='source_transcription')
 
 
 def quest_pdf_rows(pages):
@@ -929,7 +954,7 @@ def _project(conn,workspace,operation,changed):
     with conn.pipeline():
         for p in files:imp.artifact(p)
         import_ontology(imp)
-        for importer in (import_labcorp,import_quest,import_medications,import_symptoms,import_vitals,import_clinic,import_conversations,import_research):
+        for importer in (import_labcorp,import_quest,import_transcribed_labs,import_medications,import_symptoms,import_vitals,import_clinic,import_conversations,import_research):
             importer(imp); print(importer.__name__+' queued',flush=True)
         project_semantics(imp)
         project_associations(imp)

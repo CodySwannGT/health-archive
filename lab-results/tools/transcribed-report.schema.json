@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Transcribed laboratory report",
+  "description": "A laboratory report transcribed to text, with each result tied to its exact line in the transcription. Values, units and reference ranges are copied as printed: never converted, coded or inferred.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_id", "source", "laboratory", "source_description", "transcribed_by",
+               "collection_date", "report_status", "observations", "provenance"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "report_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,99}$"},
+    "source": {"enum": ["labcorp", "quest", "other_laboratory"]},
+    "laboratory": {"type": "string", "minLength": 1, "description": "The laboratory as printed, such as Labcorp."},
+    "source_description": {"type": "string", "minLength": 1, "description": "What was transcribed, such as the Labcorp portal PDF for this collection."},
+    "transcribed_by": {"enum": ["agent", "patient"]},
+    "collection_date": {"type": "string", "format": "date"},
+    "reported_date": {"type": ["string", "null"], "format": "date"},
+    "report_status": {"enum": ["final", "preliminary", "corrected", "partial", "unknown"]},
+    "specimen_id": {"type": ["string", "null"]},
+    "ordering_provider": {"type": ["string", "null"]},
+    "observations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["analyte_name", "value_text", "evidence"],
+        "properties": {
+          "panel_name": {"type": ["string", "null"]},
+          "analyte_name": {"type": "string", "minLength": 1},
+          "value_text": {"type": "string", "minLength": 1, "description": "The result exactly as printed, such as 5.9, <0.5 or Negative."},
+          "unit_text": {"type": ["string", "null"]},
+          "reference_text": {"type": ["string", "null"]},
+          "flag": {"type": ["string", "null"], "description": "The flag as printed, such as High, Low or H."},
+          "result_status": {"type": ["string", "null"]},
+          "note": {"type": ["string", "null"], "description": "Comment printed with this result."},
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["quote", "start_char", "end_char"],
+            "properties": {
+              "quote": {"type": "string", "minLength": 1},
+              "start_char": {"type": "integer", "minimum": 0},
+              "end_char": {"type": "integer", "minimum": 1}
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_path", "source_sha256", "recorded_at"],
+      "properties": {
+        "source_path": {"type": "string"},
+        "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "recorded_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

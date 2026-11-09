@@ -130,6 +130,82 @@ def record_medication(source, row_path, report, dry_run=False):
     return _write(apply, 'record-medication')
 
 
+LAB_OBSERVATION_FIELDS = ('panel_name', 'analyte_name', 'value_text', 'unit_text', 'reference_text', 'flag', 'result_status', 'note')
+
+
+def _locate(text, quote, occurrence=None):
+    """Character span of a quote in the source; a repeated quote needs its 1-based occurrence."""
+    starts, start = [], text.find(quote)
+    while start >= 0:
+        starts.append(start)
+        start = text.find(quote, start + 1)
+    if not starts:
+        raise ValueError('Evidence quote is not in the source text: ' + quote)
+    if occurrence is None and len(starts) > 1:
+        raise ValueError(f'Evidence quote occurs {len(starts)} times; quote more of the line or pass occurrence: ' + quote)
+    index = (occurrence or 1) - 1
+    if not 0 <= index < len(starts):
+        raise ValueError(f'Evidence quote occurs {len(starts)} times, not {occurrence}: ' + quote)
+    return {'quote': quote, 'start_char': starts[index], 'end_char': starts[index] + len(quote)}
+
+
+def record_lab_report(source, report_path, name, revise=False, dry_run=False):
+    """Archive a transcribed laboratory report whose every result is quoted from the transcription.
+
+    The report file holds the report fields and observations; each observation has
+    `evidence_quote` (its line, copied verbatim) and optionally `occurrence`. The
+    printed value, and the unit and reference range when given, must appear in the quote.
+    """
+    from datetime import datetime, timezone
+    from jsonschema import Draft202012Validator, FormatChecker
+    from jsonschema.exceptions import best_match
+    report = json.loads(Path(report_path).read_text())
+    folder = f'lab-results/transcribed/{name}'
+    def apply(workspace):
+        source_target = workspace / folder / 'source.txt'
+        report_target = workspace / folder / 'report.json'
+        if revise:
+            source_target.parent.mkdir(parents=True, exist_ok=True)
+            source_target.write_bytes(Path(source).read_bytes())
+        else:
+            _place(source, source_target)
+        text = source_target.read_text()
+        observations = []
+        for i, row in enumerate(report.get('observations') or []):
+            row = dict(row)
+            quote, occurrence = row.pop('evidence_quote', None), row.pop('occurrence', None)
+            if not quote:
+                raise ValueError(f'observations[{i}] needs evidence_quote: its line copied verbatim from source_text')
+            evidence = _locate(text, quote, occurrence)
+            for field in ('value_text', 'unit_text', 'reference_text'):
+                if row.get(field) and row[field] not in quote:
+                    raise ValueError(f'observations[{i}].{field} {row[field]!r} is not in its evidence quote; copy it as printed')
+            unknown = set(row) - set(LAB_OBSERVATION_FIELDS)
+            if unknown:
+                raise ValueError(f'observations[{i}] has unknown fields: {sorted(unknown)}')
+            observations.append({**row, 'evidence': evidence})
+        prior = json.loads(report_target.read_text()) if report_target.exists() else None
+        record = {'schema_version': '1.0', 'report_id': name,
+                  **{k: v for k, v in report.items() if k not in ('observations', 'report_id', 'schema_version', 'provenance')},
+                  'observations': observations,
+                  'provenance': {'source_path': f'{folder}/source.txt', 'source_sha256': hashlib.sha256(text.encode()).hexdigest(),
+                                 'recorded_at': prior['provenance']['recorded_at'] if prior else
+                                 datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')}}
+        schema = json.loads((CODE / 'lab-results/tools/transcribed-report.schema.json').read_text())
+        error = best_match(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(record))
+        if error:
+            raise ValueError(f"{'/'.join(map(str, error.absolute_path)) or 'report'}: {error.message}")
+        if prior and not revise and {**prior, 'provenance': None} != {**record, 'provenance': None}:
+            raise ValueError(f'Lab report {name} already exists with different content; pass revise to store a corrected version')
+        summary = {'report_id': name, 'collection_date': record['collection_date'], 'observations': len(observations),
+                   'replaces_prior_version': prior is not None and prior != record}
+        if dry_run:
+            raise _DryRun({**summary, 'record': record})
+        report_target.write_text(json.dumps(record, ensure_ascii=False, indent=2) + '\n')
+        return summary
+    return _write(apply, 'record-lab-report')
+
+
 def capture_conversation(session, excluded_ranges=()):
     import capture_conversation as capture
     def apply(workspace):
