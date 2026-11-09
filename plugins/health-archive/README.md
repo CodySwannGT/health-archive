@@ -36,7 +36,7 @@ The server implements the MCP authorization specification:
 
 Clients discover this automatically. On first connection your browser opens a sign-in page that shows the requesting client and where it will return. Sign in with your username and password, or create an account. Each account owns one patient chart, and tools act only on it. Five failed sign-ins lock that username for 15 minutes.
 
-Scopes: `health.read` for queries, `health.write` for `record_narrative`, `record_medication`, `capture_conversation` and `set_pooling`.
+Scopes: `health.read` for queries, `health.write` for `record_narrative`, `record_medication`, `record_lab_report`, `capture_conversation` and `set_pooling`.
 
 ## Install
 
@@ -58,7 +58,7 @@ Scopes: `health.read` for queries, `health.write` for `record_narrative`, `recor
 | `associations`, `check_in`, `intake` | Evidence-graded connections in the person's own records, the daily check-in agenda, and the first-visit intake that sets the person's tracking plan |
 | `pooled_patterns`, `pooling`, `set_pooling` | Patterns shared by at least five opted-in people, and the person's opt-in. Aggregates only; never published |
 | `get_record`, `get_document`, `graph`, `ontology`, `status`, `query` | Records, documents, graph, ontology, status and bounded read-only SQL |
-| `record_narrative`, `record_medication`, `capture_conversation` | Writes. Each runs in one transaction against the database archive. `capture_conversation` stores messages as source in about a second; the next write, or `project: true`, makes them searchable records |
+| `record_narrative`, `record_medication`, `record_lab_report`, `capture_conversation` | Writes. `record_lab_report` stores a transcribed lab report with each result quoted from the transcription. Each runs in one transaction against the database archive. `capture_conversation` stores messages as source in about a second; the next write, or `project: true`, makes them searchable records |
 
 ## Skills
 

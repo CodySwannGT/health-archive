@@ -37,7 +37,7 @@ class ScopeTests(unittest.TestCase):
     def test_tools_are_registered_with_annotations(self):
         server = app.build()
         tools = {t.name: t for t in asyncio.run(server.list_tools())}
-        self.assertTrue({'search', 'fetch', 'record_narrative', 'record_medication', 'capture_conversation'} <= set(tools))
+        self.assertTrue({'search', 'fetch', 'record_narrative', 'record_medication', 'record_lab_report', 'capture_conversation'} <= set(tools))
         self.assertTrue(tools['search'].annotations.read_only_hint)
         self.assertFalse(tools['record_narrative'].annotations.read_only_hint)
         self.assertTrue({'associations', 'check_in', 'pooled_patterns', 'pooling'} <= set(tools))

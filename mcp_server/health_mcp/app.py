@@ -28,8 +28,8 @@ The database is the system of record.
 Query before answering health questions, and cite source dates and record IDs.
 Patient reports, clinical findings, family history, patient hypotheses and agent research are distinct.
 Reported associations never establish causation. Assistant advice is never a completed action.
-Record new patient statements with record_narrative or record_medication only after reviewing exact quotes,
-then read the facts back before saying they were saved. Capture user-facing conversation turns with capture_conversation.
+Record new patient statements with record_narrative or record_medication, and lab reports the person shares with
+record_lab_report, only after reviewing exact quotes, then read the facts back before saying they were saved. Capture user-facing conversation turns with capture_conversation.
 Drawing connections is the purpose: use associations for evidence-graded patterns in the person's own records, with
 competing explanations and pooled context, and say how strong each is. An association is never a cause or a diagnosis.
 Run the morning check-in with check_in; it asks about symptom-free and alcohol-free days too, because comparisons need explicit negatives.
@@ -313,6 +313,33 @@ def build(auth_provider=None, issuer_url=None):
                 row_path = Path(tmp) / 'row.json'
                 row_path.write_text(json.dumps(row))
                 return _jsonable(writes.record_medication(source, row_path, _safe_name(report), dry_run))
+        return await _as_account(run)
+
+    @server.tool(title='Record lab report', annotations=WRITE)
+    async def record_lab_report(report_name: str, source_text: str, report: dict,
+                                revise: bool = False, dry_run: bool = False) -> dict:
+        """Record a laboratory report from its text transcription, such as a lab PDF, portal page or photo the user shared.
+
+        `source_text` is the full transcription, kept as the source. `report` has source (labcorp, quest or
+        other_laboratory), laboratory as printed, source_description (what was transcribed), transcribed_by
+        (agent or patient), collection_date, report_status (final, preliminary, corrected, partial or unknown),
+        optional reported_date, specimen_id and ordering_provider, and observations. Each observation has
+        analyte_name, value_text exactly as printed, optional panel_name, unit_text, reference_text, flag,
+        result_status and note, and evidence_quote: its result line copied verbatim from source_text, which must
+        contain the value and any unit and range. Add occurrence (1-based) when the same line appears twice.
+        Copy values as printed: never convert units, add codes or fill in missing results.
+        Check `labs` for that collection date first so a report already imported is not added twice.
+        Run with dry_run first. `report_name` is a stable kebab-case name such as labcorp-2026-11-03; pass
+        revise=true with the same name to store a corrected transcription, keeping the earlier version."""
+        _require_write()
+        import writes
+        def run():
+            with tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / 'source.txt'
+                source.write_text(source_text)
+                report_path = Path(tmp) / 'report.json'
+                report_path.write_text(json.dumps(report))
+                return _jsonable(writes.record_lab_report(source, report_path, _safe_name(report_name), revise, dry_run))
         return await _as_account(run)
 
     @server.tool(title='Save conversation', annotations=WRITE)
