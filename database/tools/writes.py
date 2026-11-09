@@ -243,6 +243,11 @@ def _append_connector_source(session_id, client, messages, received_at):
         conn.execute("SELECT pg_advisory_xact_lock(hashtext('health_archive_ingest:'||%s))", (patient,))
         workspace = Path(tmp)
         current = conn.execute('SELECT sha256 FROM health.artifacts WHERE patient_id=%s AND path=%s AND retired_run IS NULL', (patient, rel)).fetchone()
+        # A deferred source that later conflicts would block every write, so refuse an ID another capture already owns.
+        if not current and conn.execute("SELECT 1 FROM health.artifacts WHERE patient_id=%s AND path LIKE %s AND retired_run IS NULL LIMIT 1",
+                                        (patient, f'conversations/sessions/{session_id}/%')).fetchone():
+            raise ValueError(f'Session {session_id} is already captured from another source, such as its local transcript; '
+                             'use a different session_id for connector messages')
         if current:
             materialize(conn, workspace, {rel: current['sha256']})
         path, appended = append_connector_messages(workspace, session_id, client, messages, received_at)
