@@ -11,6 +11,7 @@ COPY database/tools ./database/tools
 COPY database/sql ./database/sql
 COPY symptoms/tools ./symptoms/tools
 COPY meds/tools ./meds/tools
+COPY lab-results/tools/transcribed-report.schema.json ./lab-results/tools/
 COPY mcp_server ./mcp_server
 # The exact embedding model files recorded with the indexed embeddings. Search
 # runs locally, so health text is never sent to an embedding service.
