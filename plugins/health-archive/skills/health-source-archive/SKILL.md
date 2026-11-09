@@ -7,10 +7,10 @@ description: Add, retire or back up original health source files, such as new la
 
 ## Lab reports through the connector
 
-When the user shares a lab report (a PDF, portal page or photo), record it with the connector's `record_lab_report` tool. No local checkout is needed.
+When the user shares a lab report in any format (a CSV or spreadsheet, PDF, portal page, photo or pasted text), read the values out yourself and record it with the connector's `record_lab_report` tool. No local checkout is needed.
 
 1. Query `labs` for the collection date first. If the report is already in the archive, don't add it again.
-2. Transcribe the whole report to text as `source_text`, including the header, flags and comments.
+2. Pass the report's text as `source_text`: a text file such as a CSV as-is, or a transcription of a PDF, page or photo that includes the header, flags and comments. No particular layout is required.
 3. Give one observation per printed result. Each observation needs:
    - `analyte_name`;
    - `value_text`, exactly as printed;
