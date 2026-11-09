@@ -318,15 +318,16 @@ def build(auth_provider=None, issuer_url=None):
     @server.tool(title='Record lab report', annotations=WRITE)
     async def record_lab_report(report_name: str, source_text: str, report: dict,
                                 revise: bool = False, dry_run: bool = False) -> dict:
-        """Record a laboratory report from its text transcription, such as a lab PDF, portal page or photo the user shared.
+        """Record a laboratory report the user shares, in any format: CSV, spreadsheet, PDF, portal page, photo or pasted text.
 
-        `source_text` is the full transcription, kept as the source. `report` has source (labcorp, quest or
+        Read the values out yourself. `source_text` is the report's text as you received or transcribed it, such as
+        the CSV as-is or a PDF's text, and is kept as the source. `report` has source (labcorp, quest or
         other_laboratory), laboratory as printed, source_description (what was transcribed), transcribed_by
         (agent or patient), collection_date, report_status (final, preliminary, corrected, partial or unknown),
         optional reported_date, specimen_id and ordering_provider, and observations. Each observation has
         analyte_name, value_text exactly as printed, optional panel_name, unit_text, reference_text, flag,
         result_status and note, and evidence_quote: its result line copied verbatim from source_text, which must
-        contain the value and any unit and range. Add occurrence (1-based) when the same line appears twice.
+        contain the value and any unit and range (for a CSV, the result's row). Add occurrence (1-based) when the same line appears twice.
         Copy values as printed: never convert units, add codes or fill in missing results.
         Check `labs` for that collection date first so a report already imported is not added twice.
         Run with dry_run first. `report_name` is a stable kebab-case name such as labcorp-2026-11-03; pass

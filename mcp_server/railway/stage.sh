@@ -9,7 +9,7 @@ mkdir -p "$stage"
 cd "$root"
 # database/models holds the exact public embedding model files whose hashes the indexed
 # embeddings record; search refuses any other copy.
-for path in template database/tools database/sql database/requirements.lock database/models symptoms/tools meds/tools mcp_server; do
+for path in template database/tools database/sql database/requirements.lock database/models symptoms/tools meds/tools lab-results/tools/transcribed-report.schema.json mcp_server; do
   mkdir -p "$stage/$(dirname "$path")"
   rsync -a --exclude '__pycache__' --exclude '.cache' "$path" "$stage/$(dirname "$path")/"
 done
